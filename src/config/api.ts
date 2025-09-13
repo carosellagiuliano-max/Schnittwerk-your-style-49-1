@@ -3,11 +3,31 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase configuration is missing');
-}
+// Create a dummy client if real credentials are not provided (for demo mode)
+const createSupabaseClient = () => {
+  if (!supabaseUrl || supabaseUrl === 'your_supabase_project_url' || 
+      !supabaseAnonKey || supabaseAnonKey === 'your_supabase_anon_key') {
+    console.warn('Supabase credentials not configured. Using mock client for demo mode.');
+    // Return a mock client that won't actually make requests
+    return {
+      from: () => ({
+        select: () => Promise.resolve({ data: [], error: new Error('Supabase not configured') }),
+        insert: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') }),
+        update: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') }),
+        delete: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') }),
+        eq: function() { return this; },
+        single: function() { return this; },
+        order: function() { return this; },
+        ilike: function() { return this; },
+        or: function() { return this; }
+      })
+    } as any;
+  }
+  
+  return createClient(supabaseUrl, supabaseAnonKey);
+};
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createSupabaseClient();
 
 export const API_CONFIG = {
   baseUrl: '/.netlify/functions',
