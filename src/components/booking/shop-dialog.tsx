@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,10 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingBag, Plus, Search } from 'lucide-react';
+import { ShoppingBag, Plus, Search, Loader2 } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
 import { toast } from 'sonner';
-import { products, Product } from '@/data/products';
+import { productService } from '@/services/productService';
+import { Product, ProductCategory } from '@/data/products';
 import ProductDetailDialog from './product-detail-dialog';
 
 interface ShopDialogProps {
@@ -23,10 +24,31 @@ interface ShopDialogProps {
 
 const ShopDialog = ({ children }: ShopDialogProps) => {
   const { addToCart } = useCart();
+  const [products, setProducts] = useState<ProductCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await productService.getProducts();
+      setProducts(data);
+    } catch (err) {
+      setError('Produkte konnten nicht geladen werden');
+      console.error('Error loading products:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const openProductDetail = (product: Product, category: string) => {
     setSelectedProduct(product);

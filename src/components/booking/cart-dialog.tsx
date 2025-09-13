@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ShoppingCart, Minus, Plus, Trash2, Gift } from 'lucide-react';
+import { ShoppingCart, Minus, Plus, Trash2, Gift, CreditCard } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
+import CheckoutFlow from '@/components/payment/CheckoutFlow';
+import { toast } from '@/components/ui/sonner';
 
 interface CartDialogProps {
   children: React.ReactNode;
@@ -21,19 +23,29 @@ interface CartDialogProps {
 
 const CartDialog = ({ children }: CartDialogProps) => {
   const { cartItems, updateQuantity, removeFromCart, toggleGiftWrap, totalPrice, clearCart, isGiftWrapped, giftWrapGender, setGiftWrapGender } = useCart();
+  const [showCheckout, setShowCheckout] = useState(false);
 
   const handleOrder = () => {
     if (cartItems.length === 0) return;
-    
-    const orderText = cartItems.map(item => 
+
+    const orderText = cartItems.map(item =>
       `${item.quantity}x ${item.name} - ${item.price}`
     ).join('\n');
-    
+
     const total = `\nGesamtbetrag: CHF ${totalPrice.toFixed(2)}`;
     const message = `Hallo! Ich möchte folgende Produkte bestellen:\n\n${orderText}${total}`;
-    
+
     const whatsappUrl = `https://wa.me/41718019265?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  const handleCheckoutComplete = (paymentIntentId: string) => {
+    setShowCheckout(false);
+    toast.success('Bestellung erfolgreich abgeschlossen!');
+  };
+
+  const handleCheckoutCancel = () => {
+    setShowCheckout(false);
   };
 
   return (
@@ -161,28 +173,52 @@ const CartDialog = ({ children }: CartDialogProps) => {
                 </div>
               </div>
               
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={clearCart}
-                  className="flex-1"
-                >
-                  Warenkorb leeren
-                </Button>
-                <Button
-                  onClick={handleOrder}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  Jetzt bestellen
-                </Button>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={clearCart}
+                    className="flex-1"
+                  >
+                    Warenkorb leeren
+                  </Button>
+                  <Button
+                    onClick={() => setShowCheckout(true)}
+                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={cartItems.length === 0}
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Zur Kasse
+                  </Button>
+                </div>
+
+                <div className="text-center">
+                  <Button
+                    variant="ghost"
+                    onClick={handleOrder}
+                    className="text-sm text-muted-foreground hover:text-primary"
+                  >
+                    Oder per WhatsApp bestellen
+                  </Button>
+                </div>
               </div>
-              
+
               <div className="mt-4 p-3 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground text-center">
-                  Die Bestellung wird per WhatsApp an uns gesendet. Sie können die Produkte im Salon abholen.
+                  Wählen Sie "Zur Kasse" für sichere Online-Zahlung oder "per WhatsApp" für persönliche Beratung.
                 </p>
               </div>
             </>
+          )}
+
+          {/* Checkout Flow */}
+          {showCheckout && (
+            <div className="mt-6 border-t border-border pt-6">
+              <CheckoutFlow
+                onComplete={handleCheckoutComplete}
+                onCancel={handleCheckoutCancel}
+              />
+            </div>
           )}
         </div>
       </DialogContent>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { CalendarIcon, Clock, Scissors, Users } from 'lucide-react'
+import { CalendarIcon, Clock, Scissors, Users, CreditCard, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -26,9 +26,14 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from '@/hooks/use-toast'
 import HaircutLengthDialog from './haircut-length-dialog'
 import AdditionalServicesDialog from './additional-services-dialog'
+import AppointmentService from '@/services/appointmentService'
+import CheckoutFlow from '@/components/payment/CheckoutFlow'
 
 // Using existing team owner image for Vanessa
 import vanessaLogo from '@/assets/team-owner.jpg'
@@ -66,7 +71,7 @@ export function AppointmentBookingDialog({
   children
 }: AppointmentBookingDialogProps) {
   const [open, setOpen] = useState(false)
-  const [step, setStep] = useState<'gender' | 'haircut' | 'booking' | 'additional'>('gender')
+  const [step, setStep] = useState<'gender' | 'haircut' | 'booking' | 'additional' | 'payment'>('gender')
   const [selectedGender, setSelectedGender] = useState<'women' | 'men' | null>(null)
   const [selectedHaircut, setSelectedHaircut] = useState<any>(null)
   const [selectedDate, setSelectedDate] = useState<Date>()
@@ -77,6 +82,10 @@ export function AppointmentBookingDialog({
   const [showHaircutDialog, setShowHaircutDialog] = useState(false)
   const [showAdditionalDialog, setShowAdditionalDialog] = useState(false)
   const [selectedAdditionalServices, setSelectedAdditionalServices] = useState<any[]>([])
+  const [showPayment, setShowPayment] = useState(false)
+  const [requiresDeposit, setRequiresDeposit] = useState(false)
+  const [appointmentId, setAppointmentId] = useState<string>('')
+  const [totalPrice, setTotalPrice] = useState(0)
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date)
@@ -114,38 +123,117 @@ export function AppointmentBookingDialog({
     setShowAdditionalDialog(true)
   }
 
-  const handleAdditionalServicesConfirm = (additionalServices: any[]) => {
+  const handleAdditionalServicesConfirm = async (additionalServices: any[]) => {
     setSelectedAdditionalServices(additionalServices)
     setShowAdditionalDialog(false)
-    
-    const additionalCost = additionalServices.reduce((sum, service) => 
+
+    const additionalCost = additionalServices.reduce((sum, service) =>
       sum + parseInt(service.price.replace('CHF ', '')), 0
     )
 
-    const bookingDetails = {
-      date: format(selectedDate!, 'dd.MM.yyyy'),
-      time: selectedTime,
-      hairdresser: hairdressers.find(h => h.id === selectedHairdresser)?.name ?? '',
-      haircut: selectedHaircut?.name ?? '',
-      additionalServices: additionalServices.map(s => s.name).join(', '),
-      totalAdditionalCost: additionalCost
+    const basePrice = parseInt(selectedHaircut?.price.replace('CHF ', '') || '0')
+    const totalPrice = basePrice + additionalCost
+    const vatAmount = AppointmentService.calculateVAT(totalPrice)
+    const totalWithVAT = AppointmentService.getTotalWithVAT(totalPrice)
+
+    setTotalPrice(totalWithVAT)
+
+    // Check if deposit is required (for services over CHF 100)
+    const requiresDepositPayment = totalWithVAT > 100
+    setRequiresDeposit(requiresDepositPayment)
+
+    if (requiresDepositPayment) {
+      setStep('payment')
+      setShowPayment(true)
+    } else {
+      // Create appointment without payment
+      await createAppointment(additionalServices, additionalCost, totalWithVAT, false)
     }
+  }
 
-    toast({
-      title: 'Termin erfolgreich gebucht!',
-      description: `Ihr Termin am ${bookingDetails.date} um ${bookingDetails.time} bei ${bookingDetails.hairdresser} wurde gebucht.`
-    })
+  const createAppointment = async (
+    additionalServices: any[],
+    additionalCost: number,
+    totalWithVAT: number,
+    paidDeposit: boolean
+  ) => {
+    try {
+      const basePrice = parseInt(selectedHaircut?.price.replace('CHF ', '') || '0')
+      const vatAmount = AppointmentService.calculateVAT(basePrice + additionalCost)
 
-    // Reset all states
-    setStep('gender')
-    setSelectedGender(null)
-    setSelectedHaircut(null)
-    setSelectedDate(undefined)
-    setSelectedTime(undefined)
-    setSelectedHairdresser(undefined)
-    setSelectedService(undefined)
-    setSelectedAdditionalServices([])
-    setOpen(false)
+      // Check for appointment conflicts
+      const hasConflict = await AppointmentService.checkAppointmentConflict(
+        selectedHairdresser!,
+        format(selectedDate!, 'yyyy-MM-dd'),
+        selectedTime!,
+        60 // Default duration
+      )
+
+      if (hasConflict) {
+        toast({
+          title: 'Termin nicht verfügbar',
+          description: 'Dieser Termin ist bereits belegt. Bitte wählen Sie einen anderen Zeitpunkt.',
+          variant: 'destructive'
+        })
+        return
+      }
+
+      const appointmentData = {
+        service_type: selectedHaircut?.name || 'Haarschnitt',
+        haircut_details: selectedHaircut,
+        additional_services: additionalServices,
+        appointment_date: format(selectedDate!, 'yyyy-MM-dd'),
+        appointment_time: selectedTime!,
+        duration_minutes: 60,
+        staff_id: selectedHairdresser!,
+        staff_name: hairdressers.find(h => h.id === selectedHairdresser)?.name || '',
+        base_price: basePrice,
+        additional_cost: additionalCost,
+        total_price: totalWithVAT,
+        deposit_amount: requiresDeposit ? totalWithVAT * 0.3 : undefined, // 30% deposit
+        payment_status: paidDeposit ? 'deposit_paid' as const : 'pending' as const,
+        status: 'confirmed' as const,
+      }
+
+      const appointment = await AppointmentService.createAppointment(appointmentData)
+      setAppointmentId(appointment.id)
+
+      const bookingDetails = {
+        date: format(selectedDate!, 'dd.MM.yyyy'),
+        time: selectedTime,
+        hairdresser: hairdressers.find(h => h.id === selectedHairdresser)?.name ?? '',
+        haircut: selectedHaircut?.name ?? '',
+        additionalServices: additionalServices.map(s => s.name).join(', '),
+        totalPrice: AppointmentService.formatSwissCurrency(totalWithVAT)
+      }
+
+      toast({
+        title: 'Termin erfolgreich gebucht!',
+        description: `Ihr Termin am ${bookingDetails.date} um ${bookingDetails.time} bei ${bookingDetails.hairdresser} wurde gebucht.`
+      })
+
+      // Reset all states
+      resetBooking()
+      setOpen(false)
+    } catch (error) {
+      console.error('Appointment creation error:', error)
+      toast({
+        title: 'Buchungsfehler',
+        description: 'Der Termin konnte nicht gebucht werden. Bitte versuchen Sie es erneut.',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handlePaymentComplete = (paymentIntentId: string) => {
+    setShowPayment(false)
+    createAppointment(selectedAdditionalServices, 0, totalPrice, true)
+  }
+
+  const handlePaymentCancel = () => {
+    setShowPayment(false)
+    setStep('additional')
+    setShowAdditionalDialog(true)
   }
 
   const resetBooking = () => {
@@ -367,8 +455,83 @@ export function AppointmentBookingDialog({
               </div>
             </div>
           )}
+
+          {/* Payment Step */}
+          {step === 'payment' && selectedHaircut && (
+            <div className="space-y-6 py-2">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Anzahlung erforderlich</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Für Dienstleistungen über CHF 100 ist eine Anzahlung von 30% erforderlich.
+                </p>
+              </div>
+
+              <Card className="border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    Terminübersicht
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span>Datum & Zeit:</span>
+                    <span>{format(selectedDate!, 'dd.MM.yyyy')} um {selectedTime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Friseur:</span>
+                    <span>{hairdressers.find(h => h.id === selectedHairdresser)?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Dienstleistung:</span>
+                    <span>{selectedHaircut.name}</span>
+                  </div>
+                  {selectedAdditionalServices.length > 0 && (
+                    <div className="flex justify-between">
+                      <span>Zusatzleistungen:</span>
+                      <span>{selectedAdditionalServices.map(s => s.name).join(', ')}</span>
+                    </div>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between font-semibold">
+                    <span>Gesamtbetrag:</span>
+                    <span>{AppointmentService.formatSwissCurrency(totalPrice)}</span>
+                  </div>
+                  <div className="flex justify-between text-primary">
+                    <span>Anzahlung (30%):</span>
+                    <span>{AppointmentService.formatSwissCurrency(totalPrice * 0.3)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => {
+                  setStep('additional')
+                  setShowPayment(false)
+                  setShowAdditionalDialog(true)
+                }} className="flex-1">
+                  Zurück
+                </Button>
+                <Button
+                  onClick={() => setShowPayment(true)}
+                  className="flex-1"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Anzahlung bezahlen
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Payment Flow */}
+      {showPayment && (
+        <CheckoutFlow
+          onComplete={handlePaymentComplete}
+          onCancel={handlePaymentCancel}
+        />
+      )}
 
       <HaircutLengthDialog
         isOpen={showHaircutDialog}

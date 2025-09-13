@@ -1,0 +1,2347 @@
+openapi: 3.0.3
+info:
+  title: Schnittwerk Hair Salon API
+  version: 1.0.0
+  description: |
+    Professional hair salon management system API providing comprehensive booking, 
+    customer management, e-commerce, and Swiss compliance features.
+    
+    ## Features
+    - Real-time appointment booking with conflict detection
+    - Customer loyalty program management
+    - E-commerce with Swiss payment processing
+    - GDPR/DSG compliance and data export
+    - Staff scheduling and performance tracking
+    - Financial reporting with Swiss VAT compliance
+    
+  contact:
+    name: Schnittwerk API Team
+    email: api@schnittwerk.ch
+    url: https://schnittwerk.ch
+  license:
+    name: Proprietary
+    url: https://schnittwerk.ch/terms
+
+servers:
+  - url: https://api.schnittwerk.ch/api/v1
+    description: Production server
+  - url: https://staging-api.schnittwerk.ch/api/v1
+    description: Staging server
+  - url: http://localhost:3000/api/v1
+    description: Development server
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization endpoints
+  - name: Customers
+    description: Customer management and profile operations
+  - name: Appointments
+    description: Appointment booking, scheduling, and management
+  - name: Staff
+    description: Staff management and scheduling
+  - name: Products
+    description: Product catalog and inventory management
+  - name: Orders
+    description: E-commerce order management
+  - name: Payments
+    description: Payment processing with Stripe integration
+  - name: Admin
+    description: Administrative dashboard and business management
+  - name: Compliance
+    description: Swiss compliance, GDPR, and audit endpoints
+
+paths:
+  # Authentication Endpoints
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Invalidate user session and JWT token
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh JWT token
+      description: Get new access token using refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Retrieve current authenticated user's profile
+      responses:
+        '200':
+          description: User profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Request password reset
+      description: Send password reset email to user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Password reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Customer Endpoints
+  /customers:
+    get:
+      tags:
+        - Customers
+      summary: List customers
+      description: Retrieve paginated list of customers with optional filters
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: Customers retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+    post:
+      tags:
+        - Customers
+      summary: Create customer
+      description: Create a new customer profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Customer created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /customers/{customerId}:
+    get:
+      tags:
+        - Customers
+      summary: Get customer details
+      description: Retrieve detailed customer information
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdParam'
+      responses:
+        '200':
+          description: Customer details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Customers
+      summary: Update customer
+      description: Update customer profile information
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequest'
+      responses:
+        '200':
+          description: Customer updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags:
+        - Customers
+      summary: Soft delete customer
+      description: Soft delete customer for GDPR compliance
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdParam'
+      responses:
+        '204':
+          description: Customer deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Appointment Endpoints
+  /appointments:
+    get:
+      tags:
+        - Appointments
+      summary: List appointments
+      description: Retrieve appointments with filters
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/DateFromParam'
+        - $ref: '#/components/parameters/DateToParam'
+        - $ref: '#/components/parameters/StatusParam'
+        - $ref: '#/components/parameters/StaffIdParam'
+        - $ref: '#/components/parameters/CustomerIdParam'
+      responses:
+        '200':
+          description: Appointments retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Appointments
+      summary: Book new appointment
+      description: Create a new appointment booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppointmentRequest'
+      responses:
+        '201':
+          description: Appointment booked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /appointments/{appointmentId}:
+    get:
+      tags:
+        - Appointments
+      summary: Get appointment details
+      description: Retrieve detailed appointment information
+      parameters:
+        - $ref: '#/components/parameters/AppointmentIdParam'
+      responses:
+        '200':
+          description: Appointment details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Appointments
+      summary: Update appointment
+      description: Update appointment details
+      parameters:
+        - $ref: '#/components/parameters/AppointmentIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAppointmentRequest'
+      responses:
+        '200':
+          description: Appointment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags:
+        - Appointments
+      summary: Cancel appointment
+      description: Cancel an appointment
+      parameters:
+        - $ref: '#/components/parameters/AppointmentIdParam'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelAppointmentRequest'
+      responses:
+        '204':
+          description: Appointment cancelled successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /appointments/{appointmentId}/reschedule:
+    post:
+      tags:
+        - Appointments
+      summary: Reschedule appointment
+      description: Reschedule an existing appointment
+      parameters:
+        - $ref: '#/components/parameters/AppointmentIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RescheduleAppointmentRequest'
+      responses:
+        '200':
+          description: Appointment rescheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  # Staff Endpoints
+  /staff:
+    get:
+      tags:
+        - Staff
+      summary: List staff members
+      description: Retrieve list of active staff members
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/IsActiveParam'
+      responses:
+        '200':
+          description: Staff members retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Staff
+      summary: Create staff member
+      description: Add a new staff member (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStaffRequest'
+      responses:
+        '201':
+          description: Staff member created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /staff/{staffId}:
+    get:
+      tags:
+        - Staff
+      summary: Get staff details
+      description: Retrieve detailed staff information
+      parameters:
+        - $ref: '#/components/parameters/StaffIdParam'
+      responses:
+        '200':
+          description: Staff details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Staff
+      summary: Update staff member
+      description: Update staff information
+      parameters:
+        - $ref: '#/components/parameters/StaffIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStaffRequest'
+      responses:
+        '200':
+          description: Staff updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /staff/{staffId}/schedule:
+    get:
+      tags:
+        - Staff
+      summary: Get staff schedule
+      description: Retrieve staff member's schedule for a date range
+      parameters:
+        - $ref: '#/components/parameters/StaffIdParam'
+        - $ref: '#/components/parameters/DateFromParam'
+        - $ref: '#/components/parameters/DateToParam'
+      responses:
+        '200':
+          description: Schedule retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+
+  /staff/{staffId}/availability:
+    post:
+      tags:
+        - Staff
+      summary: Update staff availability
+      description: Update staff member's availability schedule
+      parameters:
+        - $ref: '#/components/parameters/StaffIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAvailabilityRequest'
+      responses:
+        '200':
+          description: Availability updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+
+  # Product Endpoints
+  /products:
+    get:
+      tags:
+        - Products
+      summary: List products
+      description: Retrieve product catalog with categories and pagination
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CategoryParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/IsActiveParam'
+      responses:
+        '200':
+          description: Products retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+
+    post:
+      tags:
+        - Products
+      summary: Create product
+      description: Add a new product to catalog (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /products/{productId}:
+    get:
+      tags:
+        - Products
+      summary: Get product details
+      description: Retrieve detailed product information
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParam'
+      responses:
+        '200':
+          description: Product details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Products
+      summary: Update product
+      description: Update product information
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags:
+        - Products
+      summary: Deactivate product
+      description: Soft delete or deactivate a product
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParam'
+      responses:
+        '204':
+          description: Product deactivated successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Order Endpoints
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: List orders
+      description: Retrieve customer orders with pagination
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StatusParam'
+        - $ref: '#/components/parameters/CustomerIdParam'
+        - $ref: '#/components/parameters/DateFromParam'
+        - $ref: '#/components/parameters/DateToParam'
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Orders
+      summary: Create order
+      description: Create a new order from cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /orders/{orderId}:
+    get:
+      tags:
+        - Orders
+      summary: Get order details
+      description: Retrieve detailed order information
+      parameters:
+        - $ref: '#/components/parameters/OrderIdParam'
+      responses:
+        '200':
+          description: Order details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Orders
+      summary: Update order status
+      description: Update order status and fulfillment details
+      parameters:
+        - $ref: '#/components/parameters/OrderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderRequest'
+      responses:
+        '200':
+          description: Order updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Payment Endpoints
+  /payments/intent:
+    post:
+      tags:
+        - Payments
+      summary: Create payment intent
+      description: Create Stripe payment intent for order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentIntentRequest'
+      responses:
+        '201':
+          description: Payment intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntent'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /payments/confirm:
+    post:
+      tags:
+        - Payments
+      summary: Confirm payment
+      description: Confirm Stripe payment with payment method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPaymentRequest'
+      responses:
+        '200':
+          description: Payment confirmed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentConfirmation'
+
+  /payments/refund:
+    post:
+      tags:
+        - Payments
+      summary: Process refund
+      description: Process refund for order or appointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '200':
+          description: Refund processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+
+  /payments/{paymentId}/status:
+    get:
+      tags:
+        - Payments
+      summary: Get payment status
+      description: Retrieve current payment status
+      parameters:
+        - $ref: '#/components/parameters/PaymentIdParam'
+      responses:
+        '200':
+          description: Payment status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatus'
+
+  # Admin Endpoints
+  /admin/dashboard/stats:
+    get:
+      tags:
+        - Admin
+      summary: Get dashboard statistics
+      description: Retrieve business overview statistics
+      parameters:
+        - $ref: '#/components/parameters/DateFromParam'
+        - $ref: '#/components/parameters/DateToParam'
+      responses:
+        '200':
+          description: Dashboard statistics retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+
+  /admin/reports/revenue:
+    get:
+      tags:
+        - Admin
+      summary: Get revenue reports
+      description: Generate revenue analytics and reports
+      parameters:
+        - $ref: '#/components/parameters/DateFromParam'
+        - $ref: '#/components/parameters/DateToParam'
+        - $ref: '#/components/parameters/GroupByParam'
+      responses:
+        '200':
+          description: Revenue report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevenueReport'
+
+  /admin/settings:
+    get:
+      tags:
+        - Admin
+      summary: Get business settings
+      description: Retrieve current business configuration
+      responses:
+        '200':
+          description: Business settings retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessSettings'
+
+    put:
+      tags:
+        - Admin
+      summary: Update business settings
+      description: Update business configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBusinessSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessSettings'
+
+  # Compliance Endpoints
+  /compliance/gdpr/export:
+    post:
+      tags:
+        - Compliance
+      summary: Request GDPR data export
+      description: Initiate customer data export for GDPR compliance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GDPRExportRequest'
+      responses:
+        '202':
+          description: Data export initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GDPRExportResponse'
+
+  /compliance/gdpr/deletion:
+    post:
+      tags:
+        - Compliance
+      summary: Request GDPR data deletion
+      description: Initiate customer data deletion for GDPR compliance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GDPRDeletionRequest'
+      responses:
+        '202':
+          description: Data deletion initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /compliance/audit/logs:
+    get:
+      tags:
+        - Compliance
+      summary: Get audit logs
+      description: Retrieve system audit logs for compliance
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/DateFromParam'
+        - $ref: '#/components/parameters/DateToParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: Audit logs retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+
+  /compliance/vat/calculate:
+    post:
+      tags:
+        - Compliance
+      summary: Calculate VAT
+      description: Calculate Swiss VAT for transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VATCalculationRequest'
+      responses:
+        '200':
+          description: VAT calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VATCalculationResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token for API authentication
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for webhook endpoints and external integrations
+
+  schemas:
+    # Authentication Schemas
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "customer@example.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: "securePassword123"
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "customer@example.com"
+
+    # User Profile Schemas
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "customer@example.com"
+        full_name:
+          type: string
+          example: "Anna Müller"
+        phone:
+          type: string
+          example: "+41 79 123 45 67"
+        role:
+          type: string
+          enum: [owner, admin, staff, customer]
+          example: "customer"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    # Customer Schemas
+    Customer:
+      allOf:
+        - $ref: '#/components/schemas/UserProfile'
+        - type: object
+          properties:
+            gender:
+              type: string
+              enum: [female, male, child, other]
+              example: "female"
+            date_of_birth:
+              type: string
+              format: date
+              example: "1990-05-15"
+            total_spent:
+              type: number
+              format: float
+              example: 1250.50
+            loyalty_status:
+              type: string
+              enum: [neu, bronze, silber, gold, diamant]
+              example: "gold"
+            last_visit:
+              type: string
+              format: date
+              example: "2024-01-10"
+            preferred_staff_id:
+              type: string
+              format: uuid
+              nullable: true
+            notes:
+              type: string
+              nullable: true
+            gdpr_consent_date:
+              type: string
+              format: date-time
+              nullable: true
+            marketing_consent:
+              type: boolean
+              example: true
+
+    CreateCustomerRequest:
+      type: object
+      required:
+        - email
+        - full_name
+      properties:
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+          minLength: 2
+        phone:
+          type: string
+        gender:
+          type: string
+          enum: [female, male, child, other]
+        date_of_birth:
+          type: string
+          format: date
+        marketing_consent:
+          type: boolean
+          default: false
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+        phone:
+          type: string
+        gender:
+          type: string
+          enum: [female, male, child, other]
+        date_of_birth:
+          type: string
+          format: date
+        marketing_consent:
+          type: boolean
+        preferred_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    CustomerListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    # Appointment Schemas
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        staff_id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+        appointment_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        duration_minutes:
+          type: integer
+          example: 60
+        status:
+          type: string
+          enum: [pending, confirmed, in_progress, completed, cancelled_by_customer, cancelled_by_salon, no_show]
+        price:
+          type: number
+          format: float
+          example: 120.00
+        currency:
+          type: string
+          example: "CHF"
+        notes:
+          type: string
+          nullable: true
+        internal_notes:
+          type: string
+          nullable: true
+        cancellation_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAppointmentRequest:
+      type: object
+      required:
+        - customer_id
+        - staff_id
+        - service_id
+        - appointment_date
+        - start_time
+        - end_time
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        staff_id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+        appointment_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        notes:
+          type: string
+          nullable: true
+
+    UpdateAppointmentRequest:
+      type: object
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+        appointment_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        notes:
+          type: string
+          nullable: true
+
+    RescheduleAppointmentRequest:
+      type: object
+      required:
+        - new_appointment_date
+        - new_start_time
+        - new_end_time
+      properties:
+        new_appointment_date:
+          type: string
+          format: date
+        new_start_time:
+          type: string
+          format: time
+        new_end_time:
+          type: string
+          format: time
+        reason:
+          type: string
+          nullable: true
+
+    CancelAppointmentRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+        cancelled_by:
+          type: string
+          enum: [customer, salon]
+
+    AppointmentListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Appointment'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    # Staff Schemas
+    Staff:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        profile_id:
+          type: string
+          format: uuid
+          nullable: true
+        employee_id:
+          type: string
+          example: "EMP001"
+        full_name:
+          type: string
+          example: "Vanessa Schneider"
+        position:
+          type: string
+          enum: [owner, senior_stylist, stylist, assistant, trainee]
+          example: "senior_stylist"
+        specialties:
+          type: array
+          items:
+            type: string
+          example: ["schnitt", "farbe", "bart"]
+        weekly_hours:
+          type: integer
+          example: 40
+        hourly_rate:
+          type: number
+          format: float
+          example: 45.00
+        commission_rate:
+          type: number
+          format: float
+          example: 15.00
+        is_active:
+          type: boolean
+          example: true
+        hire_date:
+          type: string
+          format: date
+        termination_date:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    CreateStaffRequest:
+      type: object
+      required:
+        - employee_id
+        - full_name
+        - position
+      properties:
+        employee_id:
+          type: string
+        full_name:
+          type: string
+        position:
+          type: string
+          enum: [owner, senior_stylist, stylist, assistant, trainee]
+        specialties:
+          type: array
+          items:
+            type: string
+        weekly_hours:
+          type: integer
+        hourly_rate:
+          type: number
+          format: float
+        commission_rate:
+          type: number
+          format: float
+        hire_date:
+          type: string
+          format: date
+
+    UpdateStaffRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+        position:
+          type: string
+          enum: [owner, senior_stylist, stylist, assistant, trainee]
+        specialties:
+          type: array
+          items:
+            type: string
+        weekly_hours:
+          type: integer
+        hourly_rate:
+          type: number
+          format: float
+        commission_rate:
+          type: number
+          format: float
+        is_active:
+          type: boolean
+
+    StaffListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Staff'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ScheduleResponse:
+      type: object
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+        schedule:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              start_time:
+                type: string
+                format: time
+              end_time:
+                type: string
+                format: time
+              is_available:
+                type: boolean
+
+    UpdateAvailabilityRequest:
+      type: object
+      required:
+        - schedule
+      properties:
+        schedule:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              start_time:
+                type: string
+                format: time
+              end_time:
+                type: string
+                format: time
+              is_available:
+                type: boolean
+
+    # Product Schemas
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Hydrating Shampoo"
+        description:
+          type: string
+        detailed_description:
+          type: string
+          nullable: true
+        usage_instructions:
+          type: string
+          nullable: true
+        price:
+          type: number
+          format: float
+          example: 24.90
+        currency:
+          type: string
+          example: "CHF"
+        cost_price:
+          type: number
+          format: float
+          nullable: true
+        sku:
+          type: string
+          example: "SHP-001"
+        track_inventory:
+          type: boolean
+          example: true
+        stock_quantity:
+          type: integer
+          example: 25
+        low_stock_threshold:
+          type: integer
+          example: 5
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+        image_alt:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+          example: 1
+        is_active:
+          type: boolean
+          example: true
+        vat_rate:
+          type: number
+          format: float
+          example: 7.70
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateProductRequest:
+      type: object
+      required:
+        - category_id
+        - name
+        - description
+        - price
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        detailed_description:
+          type: string
+        usage_instructions:
+          type: string
+        price:
+          type: number
+          format: float
+        cost_price:
+          type: number
+          format: float
+        sku:
+          type: string
+        track_inventory:
+          type: boolean
+        stock_quantity:
+          type: integer
+        low_stock_threshold:
+          type: integer
+        image_url:
+          type: string
+          format: uri
+        sort_order:
+          type: integer
+        vat_rate:
+          type: number
+          format: float
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        detailed_description:
+          type: string
+        usage_instructions:
+          type: string
+        price:
+          type: number
+          format: float
+        cost_price:
+          type: number
+          format: float
+        sku:
+          type: string
+        track_inventory:
+          type: boolean
+        stock_quantity:
+          type: integer
+        low_stock_threshold:
+          type: integer
+        image_url:
+          type: string
+          format: uri
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        vat_rate:
+          type: number
+          format: float
+
+    ProductListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    # Order Schemas
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+          example: "ORD-2024-001"
+        status:
+          type: string
+          enum: [pending, confirmed, preparing, ready, delivered, cancelled]
+        subtotal:
+          type: number
+          format: float
+          example: 89.70
+        tax_amount:
+          type: number
+          format: float
+          example: 6.91
+        total_amount:
+          type: number
+          format: float
+          example: 96.61
+        currency:
+          type: string
+          example: "CHF"
+        payment_method:
+          type: string
+          example: "stripe"
+        payment_status:
+          type: string
+          enum: [pending, completed, failed, refunded, partially_refunded]
+        payment_intent_id:
+          type: string
+          nullable: true
+        is_gift_wrapped:
+          type: boolean
+          example: false
+        gift_wrap_gender:
+          type: string
+          enum: [female, male, child, other]
+          nullable: true
+        special_instructions:
+          type: string
+          nullable: true
+        ordered_at:
+          type: string
+          format: date-time
+        payment_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        fulfilled_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        product_name:
+          type: string
+        quantity:
+          type: integer
+          example: 2
+        unit_price:
+          type: number
+          format: float
+          example: 24.90
+        total_price:
+          type: number
+          format: float
+          example: 49.80
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - product_id
+              - quantity
+            properties:
+              product_id:
+                type: string
+                format: uuid
+              quantity:
+                type: integer
+                minimum: 1
+        is_gift_wrapped:
+          type: boolean
+        gift_wrap_gender:
+          type: string
+          enum: [female, male, child, other]
+        special_instructions:
+          type: string
+
+    UpdateOrderRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, preparing, ready, delivered, cancelled]
+
+    OrderListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    # Payment Schemas
+    CreatePaymentIntentRequest:
+      type: object
+      required:
+        - order_id
+        - amount
+        - currency
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+          example: 96.61
+        currency:
+          type: string
+          example: "CHF"
+
+    PaymentIntent:
+      type: object
+      properties:
+        id:
+          type: string
+        client_secret:
+          type: string
+        amount:
+          type: number
+          format: float
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [requires_payment_method, requires_confirmation, requires_action, processing, succeeded, canceled]
+
+    ConfirmPaymentRequest:
+      type: object
+      required:
+        - payment_intent_id
+        - payment_method_id
+      properties:
+        payment_intent_id:
+          type: string
+        payment_method_id:
+          type: string
+
+    PaymentConfirmation:
+      type: object
+      properties:
+        payment_intent_id:
+          type: string
+        status:
+          type: string
+        amount:
+          type: number
+          format: float
+        currency:
+          type: string
+
+    RefundRequest:
+      type: object
+      required:
+        - payment_intent_id
+        - amount
+      properties:
+        payment_intent_id:
+          type: string
+        amount:
+          type: number
+          format: float
+        reason:
+          type: string
+
+    RefundResponse:
+      type: object
+      properties:
+        refund_id:
+          type: string
+        amount:
+          type: number
+          format: float
+        status:
+          type: string
+          enum: [pending, succeeded, failed, canceled]
+
+    PaymentStatus:
+      type: object
+      properties:
+        payment_intent_id:
+          type: string
+        status:
+          type: string
+        amount:
+          type: number
+          format: float
+        currency:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # Admin Schemas
+    DashboardStats:
+      type: object
+      properties:
+        total_revenue:
+          type: number
+          format: float
+        total_appointments:
+          type: integer
+        total_customers:
+          type: integer
+        total_products_sold:
+          type: integer
+        average_appointment_value:
+          type: number
+          format: float
+        utilization_rate:
+          type: number
+          format: float
+        new_customers_this_month:
+          type: integer
+        returning_customers_this_month:
+          type: integer
+
+    RevenueReport:
+      type: object
+      properties:
+        period:
+          type: string
+          example: "2024-01"
+        total_revenue:
+          type: number
+          format: float
+        appointment_revenue:
+          type: number
+          format: float
+        product_revenue:
+          type: number
+          format: float
+        tax_amount:
+          type: number
+          format: float
+        net_revenue:
+          type: number
+          format: float
+        daily_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              revenue:
+                type: number
+                format: float
+
+    BusinessSettings:
+      type: object
+      properties:
+        salon_name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        opening_hours:
+          type: object
+          properties:
+            monday:
+              type: object
+              properties:
+                open:
+                  type: string
+                  format: time
+                close:
+                  type: string
+                  format: time
+                closed:
+                  type: boolean
+            tuesday:
+              $ref: '#/components/schemas/DaySchedule'
+            wednesday:
+              $ref: '#/components/schemas/DaySchedule'
+            thursday:
+              $ref: '#/components/schemas/DaySchedule'
+            friday:
+              $ref: '#/components/schemas/DaySchedule'
+            saturday:
+              $ref: '#/components/schemas/DaySchedule'
+            sunday:
+              $ref: '#/components/schemas/DaySchedule'
+        vat_rate:
+          type: number
+          format: float
+          example: 7.70
+        currency:
+          type: string
+          example: "CHF"
+
+    DaySchedule:
+      type: object
+      properties:
+        open:
+          type: string
+          format: time
+        close:
+          type: string
+          format: time
+        closed:
+          type: boolean
+
+    UpdateBusinessSettingsRequest:
+      type: object
+      properties:
+        salon_name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        opening_hours:
+          type: object
+        vat_rate:
+          type: number
+          format: float
+
+    # Compliance Schemas
+    GDPRExportRequest:
+      type: object
+      required:
+        - customer_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        include_appointments:
+          type: boolean
+          default: true
+        include_orders:
+          type: boolean
+          default: true
+        include_payments:
+          type: boolean
+          default: true
+
+    GDPRExportResponse:
+      type: object
+      properties:
+        export_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        download_url:
+          type: string
+          format: uri
+          nullable: true
+        estimated_completion:
+          type: string
+          format: date-time
+
+    GDPRDeletionRequest:
+      type: object
+      required:
+        - customer_id
+        - reason
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          enum: [customer_request, legal_requirement, business_closure]
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_role:
+          type: string
+          enum: [owner, admin, staff, customer]
+        action:
+          type: string
+          enum: [create, read, update, delete, login, logout]
+        table_name:
+          type: string
+        record_id:
+          type: string
+          format: uuid
+        old_values:
+          type: object
+          nullable: true
+        new_values:
+          type: object
+          nullable: true
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLogListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    VATCalculationRequest:
+      type: object
+      required:
+        - amount
+        - vat_rate
+      properties:
+        amount:
+          type: number
+          format: float
+        vat_rate:
+          type: number
+          format: float
+          example: 7.70
+
+    VATCalculationResponse:
+      type: object
+      properties:
+        net_amount:
+          type: number
+          format: float
+        vat_amount:
+          type: number
+          format: float
+        gross_amount:
+          type: number
+          format: float
+        vat_rate:
+          type: number
+          format: float
+
+    # Common Schemas
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 150
+        total_pages:
+          type: integer
+          example: 8
+        has_next:
+          type: boolean
+          example: true
+        has_prev:
+          type: boolean
+          example: false
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "validation_error"
+        message:
+          type: string
+          example: "Invalid request data"
+        details:
+          type: object
+          nullable: true
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+
+  parameters:
+    # Common Parameters
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    SearchParam:
+      name: search
+      in: query
+      description: Search term for filtering results
+      schema:
+        type: string
+
+    SortParam:
+      name: sort
+      in: query
+      description: Sort field and direction (e.g., 'created_at:desc')
+      schema:
+        type: string
+
+    DateFromParam:
+      name: date_from
+      in: query
+      description: Start date for filtering (ISO 8601)
+      schema:
+        type: string
+        format: date
+
+    DateToParam:
+      name: date_to
+      in: query
+      description: End date for filtering (ISO 8601)
+      schema:
+        type: string
+        format: date
+
+    GroupByParam:
+      name: group_by
+      in: query
+      description: Group results by period (day, week, month)
+      schema:
+        type: string
+        enum: [day, week, month]
+        default: day
+
+    StatusParam:
+      name: status
+      in: query
+      description: Filter by status
+      schema:
+        type: string
+
+    IsActiveParam:
+      name: is_active
+      in: query
+      description: Filter by active status
+      schema:
+        type: boolean
+
+    CustomerIdParam:
+      name: customerId
+      in: path
+      required: true
+      description: Customer unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    AppointmentIdParam:
+      name: appointmentId
+      in: path
+      required: true
+      description: Appointment unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    StaffIdParam:
+      name: staffId
+      in: path
+      required: true
+      description: Staff member unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    ProductIdParam:
+      name: productId
+      in: path
+      required: true
+      description: Product unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    OrderIdParam:
+      name: orderId
+      in: path
+      required: true
+      description: Order unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    PaymentIdParam:
+      name: paymentId
+      in: path
+      required: true
+      description: Payment unique identifier
+      schema:
+        type: string
+
+    UserIdParam:
+      name: user_id
+      in: query
+      description: Filter by user ID
+      schema:
+        type: string
+        format: uuid
+
+    CategoryParam:
+      name: category
+      in: query
+      description: Filter by category ID
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "unauthorized"
+            message: "Authentication required"
+            code: "UNAUTHORIZED"
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "forbidden"
+            message: "Insufficient permissions"
+            code: "FORBIDDEN"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "not_found"
+            message: "Resource not found"
+            code: "NOT_FOUND"
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "validation_error"
+            message: "Invalid request data"
+            details:
+              email: "Invalid email format"
+            code: "VALIDATION_ERROR"
+
+    ConflictError:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "conflict"
+            message: "Appointment time slot already booked"
+            code: "CONFLICT"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "rate_limit_exceeded"
+            message: "Too many requests"
+            code: "RATE_LIMIT_EXCEEDED"
