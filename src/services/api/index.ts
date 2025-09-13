@@ -35,6 +35,11 @@ export type {
   Category,
   Service,
   Appointment,
+  Staff,
+  StaffSchedule,
+  WaitingListEntry,
+  AppointmentConflict,
+  TimeSlot,
   APIService,
 } from './mockService';
 

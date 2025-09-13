@@ -12,7 +12,12 @@ import type {
   Product, 
   Category, 
   Service, 
-  Appointment 
+  Appointment,
+  Staff,
+  StaffSchedule,
+  WaitingListEntry,
+  AppointmentConflict,
+  TimeSlot
 } from './mockService';
 
 /**
@@ -694,6 +699,525 @@ export class SupabaseAPIService implements APIService {
     } catch (error) {
       this.handleError(error, 'deleteAppointment');
     }
+  }
+
+  // Sprint B: Advanced Appointment Features Implementation
+  async getAppointmentsByDateRange(startDate: string, endDate: string): Promise<Appointment[]> {
+    this.log('getAppointmentsByDateRange', { startDate, endDate });
+    
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .gte('appointment_date', startDate)
+        .lte('appointment_date', endDate)
+        .order('appointment_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      this.handleError(error, 'getAppointmentsByDateRange');
+    }
+  }
+
+  async checkAppointmentConflicts(appointment: Partial<Appointment>): Promise<AppointmentConflict[]> {
+    this.log('checkAppointmentConflicts', appointment);
+    
+    const conflicts: AppointmentConflict[] = [];
+    
+    if (!appointment.staff_id || !appointment.appointment_date || !appointment.start_time) {
+      return conflicts;
+    }
+    
+    try {
+      // Check for staff double booking
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('staff_id', appointment.staff_id)
+        .eq('appointment_date', appointment.appointment_date)
+        .eq('start_time', appointment.start_time)
+        .neq('id', appointment.id || '');
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        conflicts.push({
+          type: 'staff_double_booking',
+          message: 'Staff member already has an appointment at this time',
+          conflicting_appointment_id: data[0].id
+        });
+      }
+      
+      return conflicts;
+    } catch (error) {
+      this.handleError(error, 'checkAppointmentConflicts');
+    }
+  }
+
+  async getAvailableTimeSlots(date: string, serviceId: string, staffId?: string): Promise<TimeSlot[]> {
+    this.log('getAvailableTimeSlots', { date, serviceId, staffId });
+    
+    try {
+      // Get staff schedules for the date
+      const dayOfWeek = new Date(date).getDay();
+      let staffQuery = supabase
+        .from('staff')
+        .select(`
+          id,
+          full_name,
+          staff_schedules!inner(*)
+        `)
+        .eq('is_active', true)
+        .eq('staff_schedules.day_of_week', dayOfWeek)
+        .eq('staff_schedules.is_available', true);
+
+      if (staffId) {
+        staffQuery = staffQuery.eq('id', staffId);
+      }
+
+      const { data: staffData, error: staffError } = await staffQuery;
+      if (staffError) throw staffError;
+
+      // Get existing appointments for the date
+      const { data: appointments, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('appointment_date', date);
+
+      if (appointmentsError) throw appointmentsError;
+
+      const timeSlots: TimeSlot[] = [];
+      const times = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'];
+
+      for (const staff of staffData || []) {
+        for (const time of times) {
+          const isBooked = appointments?.some(apt => 
+            apt.staff_id === staff.id && apt.start_time === time
+          );
+
+          if (!isBooked) {
+            timeSlots.push({
+              date,
+              start_time: time,
+              end_time: this.addMinutes(time, 60),
+              staff_id: staff.id,
+              staff_name: staff.full_name,
+              duration_minutes: 60,
+              is_available: true
+            });
+          }
+        }
+      }
+
+      return timeSlots;
+    } catch (error) {
+      this.handleError(error, 'getAvailableTimeSlots');
+    }
+  }
+
+  async rescheduleAppointment(appointmentId: string, newDate: string, newStartTime: string): Promise<Appointment> {
+    this.log('rescheduleAppointment', { appointmentId, newDate, newStartTime });
+    
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .update({
+          appointment_date: newDate,
+          start_time: newStartTime,
+          end_time: this.addMinutes(newStartTime, 60), // Assuming 60 min duration
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', appointmentId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      this.handleError(error, 'rescheduleAppointment');
+    }
+  }
+
+  // Sprint B: Staff Management Implementation
+  async getStaff(): Promise<Staff[]> {
+    this.log('getStaff');
+    
+    try {
+      const { data, error } = await supabase
+        .from('staff')
+        .select(`
+          *,
+          profiles!inner(full_name, email, phone)
+        `)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      return (data || []).map(this.mapStaffFromSupabase);
+    } catch (error) {
+      this.handleError(error, 'getStaff');
+    }
+  }
+
+  async getStaffMember(id: string): Promise<Staff | null> {
+    this.log('getStaffMember', { id });
+    
+    try {
+      const { data, error } = await supabase
+        .from('staff')
+        .select(`
+          *,
+          profiles!inner(full_name, email, phone)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        throw error;
+      }
+      
+      return this.mapStaffFromSupabase(data);
+    } catch (error) {
+      this.handleError(error, 'getStaffMember');
+    }
+  }
+
+  async createStaffMember(staff: Partial<Staff>): Promise<Staff> {
+    this.log('createStaffMember', staff);
+    
+    try {
+      const { data, error } = await supabase
+        .from('staff')
+        .insert({
+          employee_id: staff.employee_id || `EMP${Date.now()}`,
+          position: staff.position || 'stylist',
+          specialties: staff.specialties || [],
+          weekly_hours: staff.weekly_hours || 40,
+          hourly_rate: staff.hourly_rate,
+          commission_rate: staff.commission_rate,
+          is_active: true,
+          hire_date: staff.hire_date || new Date().toISOString().split('T')[0]
+        })
+        .select(`
+          *,
+          profiles!inner(full_name, email, phone)
+        `)
+        .single();
+
+      if (error) throw error;
+      return this.mapStaffFromSupabase(data);
+    } catch (error) {
+      this.handleError(error, 'createStaffMember');
+    }
+  }
+
+  async updateStaffMember(id: string, staff: Partial<Staff>): Promise<Staff> {
+    this.log('updateStaffMember', { id, staff });
+    
+    try {
+      const { data, error } = await supabase
+        .from('staff')
+        .update({
+          ...staff,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select(`
+          *,
+          profiles!inner(full_name, email, phone)
+        `)
+        .single();
+
+      if (error) throw error;
+      return this.mapStaffFromSupabase(data);
+    } catch (error) {
+      this.handleError(error, 'updateStaffMember');
+    }
+  }
+
+  async deleteStaffMember(id: string): Promise<void> {
+    this.log('deleteStaffMember', { id });
+    
+    try {
+      const { error } = await supabase
+        .from('staff')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      this.handleError(error, 'deleteStaffMember');
+    }
+  }
+
+  // Sprint B: Staff Scheduling Implementation
+  async getStaffSchedules(staffId?: string): Promise<StaffSchedule[]> {
+    this.log('getStaffSchedules', { staffId });
+    
+    try {
+      let query = supabase
+        .from('staff_schedules')
+        .select('*')
+        .order('day_of_week', { ascending: true });
+
+      if (staffId) {
+        query = query.eq('staff_id', staffId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      this.handleError(error, 'getStaffSchedules');
+    }
+  }
+
+  async getStaffSchedule(staffId: string, date: string): Promise<StaffSchedule[]> {
+    this.log('getStaffSchedule', { staffId, date });
+    
+    try {
+      const dayOfWeek = new Date(date).getDay();
+      const { data, error } = await supabase
+        .from('staff_schedules')
+        .select('*')
+        .eq('staff_id', staffId)
+        .eq('day_of_week', dayOfWeek)
+        .lte('effective_date', date)
+        .order('effective_date', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      this.handleError(error, 'getStaffSchedule');
+    }
+  }
+
+  async createStaffSchedule(schedule: Partial<StaffSchedule>): Promise<StaffSchedule> {
+    this.log('createStaffSchedule', schedule);
+    
+    try {
+      const { data, error } = await supabase
+        .from('staff_schedules')
+        .insert({
+          staff_id: schedule.staff_id || '',
+          effective_date: schedule.effective_date || new Date().toISOString().split('T')[0],
+          day_of_week: schedule.day_of_week || 1,
+          start_time: schedule.start_time || '09:00',
+          end_time: schedule.end_time || '17:00',
+          break_start: schedule.break_start,
+          break_end: schedule.break_end,
+          is_regular: schedule.is_regular ?? true,
+          is_available: schedule.is_available ?? true
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      this.handleError(error, 'createStaffSchedule');
+    }
+  }
+
+  async updateStaffSchedule(id: string, schedule: Partial<StaffSchedule>): Promise<StaffSchedule> {
+    this.log('updateStaffSchedule', { id, schedule });
+    
+    try {
+      const { data, error } = await supabase
+        .from('staff_schedules')
+        .update(schedule)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      this.handleError(error, 'updateStaffSchedule');
+    }
+  }
+
+  async deleteStaffSchedule(id: string): Promise<void> {
+    this.log('deleteStaffSchedule', { id });
+    
+    try {
+      const { error } = await supabase
+        .from('staff_schedules')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      this.handleError(error, 'deleteStaffSchedule');
+    }
+  }
+
+  // Sprint B: Waiting List Implementation
+  async getWaitingList(): Promise<WaitingListEntry[]> {
+    this.log('getWaitingList');
+    
+    try {
+      const { data, error } = await supabase
+        .from('waiting_list')
+        .select('*')
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      this.handleError(error, 'getWaitingList');
+    }
+  }
+
+  async getWaitingListEntry(id: string): Promise<WaitingListEntry | null> {
+    this.log('getWaitingListEntry', { id });
+    
+    try {
+      const { data, error } = await supabase
+        .from('waiting_list')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      this.handleError(error, 'getWaitingListEntry');
+    }
+  }
+
+  async addToWaitingList(entry: Partial<WaitingListEntry>): Promise<WaitingListEntry> {
+    this.log('addToWaitingList', entry);
+    
+    try {
+      const { data, error } = await supabase
+        .from('waiting_list')
+        .insert({
+          customer_id: entry.customer_id || '',
+          service_id: entry.service_id || '',
+          preferred_staff_id: entry.preferred_staff_id,
+          preferred_date: entry.preferred_date,
+          preferred_time_start: entry.preferred_time_start,
+          preferred_time_end: entry.preferred_time_end,
+          flexible_dates: entry.flexible_dates ?? true,
+          flexible_times: entry.flexible_times ?? true,
+          priority: entry.priority || 'medium',
+          max_wait_days: entry.max_wait_days || 30,
+          notify_email: entry.notify_email ?? true,
+          notify_sms: entry.notify_sms ?? false
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      this.handleError(error, 'addToWaitingList');
+    }
+  }
+
+  async updateWaitingListEntry(id: string, entry: Partial<WaitingListEntry>): Promise<WaitingListEntry> {
+    this.log('updateWaitingListEntry', { id, entry });
+    
+    try {
+      const { data, error } = await supabase
+        .from('waiting_list')
+        .update(entry)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      this.handleError(error, 'updateWaitingListEntry');
+    }
+  }
+
+  async removeFromWaitingList(id: string): Promise<void> {
+    this.log('removeFromWaitingList', { id });
+    
+    try {
+      const { error } = await supabase
+        .from('waiting_list')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      this.handleError(error, 'removeFromWaitingList');
+    }
+  }
+
+  async convertWaitingListToAppointment(entryId: string, timeSlot: TimeSlot): Promise<Appointment> {
+    this.log('convertWaitingListToAppointment', { entryId, timeSlot });
+    
+    try {
+      const entry = await this.getWaitingListEntry(entryId);
+      if (!entry) throw new Error('Waiting list entry not found');
+
+      // Create appointment
+      const appointment = await this.createAppointment({
+        customer_id: entry.customer_id,
+        staff_id: timeSlot.staff_id,
+        service_id: entry.service_id,
+        appointment_date: timeSlot.date,
+        start_time: timeSlot.start_time,
+        end_time: timeSlot.end_time,
+        duration_minutes: timeSlot.duration_minutes,
+        status: 'confirmed',
+        price: 80, // Mock price - should come from service
+        currency: 'CHF',
+        notes: 'Converted from waiting list'
+      });
+
+      // Remove from waiting list
+      await this.removeFromWaitingList(entryId);
+
+      return appointment;
+    } catch (error) {
+      this.handleError(error, 'convertWaitingListToAppointment');
+    }
+  }
+
+  // Helper methods
+  private mapStaffFromSupabase(data: any): Staff {
+    return {
+      id: data.id,
+      profile_id: data.profile_id,
+      employee_id: data.employee_id,
+      position: data.position,
+      full_name: data.profiles?.full_name || '',
+      email: data.profiles?.email || '',
+      phone: data.profiles?.phone,
+      specialties: data.specialties || [],
+      weekly_hours: data.weekly_hours,
+      hourly_rate: data.hourly_rate,
+      commission_rate: data.commission_rate,
+      is_active: data.is_active,
+      hire_date: data.hire_date,
+      termination_date: data.termination_date,
+      created_at: data.created_at,
+      updated_at: data.updated_at
+    };
+  }
+
+  private addMinutes(time: string, minutes: number): string {
+    const [hours, mins] = time.split(':').map(Number);
+    const totalMinutes = hours * 60 + mins + minutes;
+    const newHours = Math.floor(totalMinutes / 60);
+    const newMins = totalMinutes % 60;
+    return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
   }
 
   // Helper method to map Supabase profile to Customer interface
