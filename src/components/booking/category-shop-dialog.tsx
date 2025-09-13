@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingBag, Search, Plus, Minus } from 'lucide-react';
-import { productCategories, Product } from '@/data/products';
+import { productService, type Product, type ProductCategory } from '@/services/productService';
 import { useCart } from '@/contexts/cart-context';
 import ProductDetailDialog from './product-detail-dialog';
 import CustomVoucherDialog from './custom-voucher-dialog';
@@ -24,6 +24,8 @@ interface CategoryShopDialogProps {
 }
 
 const CategoryShopDialog = ({ children, initialCategory }: CategoryShopDialogProps) => {
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -32,18 +34,42 @@ const CategoryShopDialog = ({ children, initialCategory }: CategoryShopDialogPro
   const [quantities, setQuantities] = useState<{[key: string]: number}>({});
   const { addToCart } = useCart();
 
+  // Load product categories from API service
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        const data = await productService.getProducts();
+        setProductCategories(data);
+        
+        // Set initial category if products are loaded and no category is set
+        if (data.length > 0 && !initialCategory) {
+          setActiveCategory(data[0].category);
+        }
+      } catch (error) {
+        console.error('Failed to load product categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, [initialCategory]);
+
   const openProductDetail = (product: Product, category: string) => {
     setSelectedProduct(product);
     setSelectedCategory(category);
     setIsDetailOpen(true);
   };
 
-  const categoryTabs = Object.keys(productCategories);
+  const categoryTabs = productCategories.map(cat => cat.category);
 
   const getFilteredProducts = () => {
-    if (!activeCategory) return [];
-    const categoryProducts = productCategories[activeCategory as keyof typeof productCategories];
-    return categoryProducts.filter(product =>
+    if (!activeCategory || loading) return [];
+    const categoryData = productCategories.find(cat => cat.category === activeCategory);
+    if (!categoryData) return [];
+    
+    return categoryData.items.filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.detailedDescription.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -117,7 +143,21 @@ const CategoryShopDialog = ({ children, initialCategory }: CategoryShopDialogPro
         
         {/* Products Grid */}
         <div className="grid gap-4 mt-6">
-          {getFilteredProducts().map((product, productIndex) => (
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-2 text-muted-foreground">Produkte werden geladen...</p>
+              </div>
+            </div>
+          ) : getFilteredProducts().length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                {searchTerm ? 'Keine Produkte gefunden.' : 'Keine Produkte verfügbar.'}
+              </p>
+            </div>
+          ) : (
+            getFilteredProducts().map((product, productIndex) => (
             <Card key={productIndex} className="border-border hover:shadow-soft transition-elegant">
               <CardContent className="p-4">
                 <div className="flex gap-4">
@@ -186,12 +226,7 @@ const CategoryShopDialog = ({ children, initialCategory }: CategoryShopDialogPro
                 </div>
               </CardContent>
             </Card>
-          ))}
-          
-          {getFilteredProducts().length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Keine Produkte gefunden.</p>
-            </div>
+          ))
           )}
         </div>
         

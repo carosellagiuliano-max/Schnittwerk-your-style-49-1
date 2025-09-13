@@ -14,8 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { ShoppingBag, Plus, Search, Loader2 } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
 import { toast } from 'sonner';
-import { productService } from '@/services/productService';
-import { Product, ProductCategory } from '@/data/products';
+import { productService, type Product, type ProductCategory } from '@/services/productService';
 import ProductDetailDialog from './product-detail-dialog';
 
 interface ShopDialogProps {
