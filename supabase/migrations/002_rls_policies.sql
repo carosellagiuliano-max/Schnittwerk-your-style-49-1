@@ -285,15 +285,30 @@ CREATE POLICY "admin_analytics_access" ON analytics_daily
     is_admin_or_owner(auth.uid())
   );
 
+-- Table to store allowed staff email domains
+CREATE TABLE IF NOT EXISTS staff_email_domains (
+  domain TEXT PRIMARY KEY
+);
+
+-- Insert initial staff domain
+INSERT INTO staff_email_domains (domain) VALUES ('schnittwerk.ch') ON CONFLICT DO NOTHING;
+
 -- Create a function to automatically grant appropriate role based on email domain
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  email_domain TEXT;
 BEGIN
+  -- Extract domain from email
+  email_domain := split_part(NEW.email, '@', 2);
+
   INSERT INTO public.profiles (id, role, full_name, email)
   VALUES (
     NEW.id,
     CASE 
-      WHEN NEW.email LIKE '%@schnittwerk.ch' THEN 'staff'::user_role_enum
+      WHEN EXISTS (
+        SELECT 1 FROM staff_email_domains d WHERE d.domain = email_domain
+      ) THEN 'staff'::user_role_enum
       ELSE 'customer'::user_role_enum
     END,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
