@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { AddCustomerModal } from './AddCustomerModal';
+import { customerService, type Customer } from '@/services/customerService';
 
 const customerStatusConfig = {
   neu: { 
@@ -68,104 +69,43 @@ const customerStatusConfig = {
   }
 };
 
-const mockCustomers = [
-  {
-    id: 1,
-    name: 'Maria Schmidt',
-    gender: 'female',
-    ageGroup: 'adult',
-    email: 'maria.schmidt@email.com',
-    phone: '+41 79 123 45 67',
-    appointments: 12,
-    totalRevenue: 1240,
-    status: 'gold' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-10',
-    nextAppointment: '2024-01-20',
-    hasAppointmentThisWeek: true
-  },
-  {
-    id: 2,
-    name: 'Hans Müller',
-    gender: 'male',
-    ageGroup: 'adult',
-    email: 'hans.mueller@email.com',
-    phone: '+41 79 234 56 78',
-    appointments: 8,
-    totalRevenue: 620,
-    status: 'silber' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-08',
-    nextAppointment: null,
-    hasAppointmentThisWeek: false
-  },
-  {
-    id: 3,
-    name: 'Sarah Weber',
-    gender: 'female',
-    ageGroup: 'adult',
-    email: 'sarah.weber@email.com',
-    phone: '+41 79 345 67 89',
-    appointments: 25,
-    totalRevenue: 2150,
-    status: 'diamant' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-12',
-    nextAppointment: '2024-01-25',
-    hasAppointmentThisWeek: false
-  },
-  {
-    id: 4,
-    name: 'Emma Keller',
-    gender: 'child',
-    ageGroup: 'child',
-    email: 'lisa.keller@email.com',
-    phone: '+41 79 456 78 90',
-    appointments: 3,
-    totalRevenue: 180,
-    status: 'neu' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-05',
-    nextAppointment: null,
-    hasAppointmentThisWeek: false
-  },
-  {
-    id: 5,
-    name: 'Thomas Zimmermann',
-    gender: 'male',
-    ageGroup: 'adult',
-    email: 'thomas.zimmermann@email.com',
-    phone: '+41 79 567 89 01',
-    appointments: 6,
-    totalRevenue: 390,
-    status: 'bronze' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-09',
-    nextAppointment: '2024-01-18',
-    hasAppointmentThisWeek: true
-  },
-  {
-    id: 6,
-    name: 'Luca Meyer',
-    gender: 'child',
-    ageGroup: 'child',
-    email: 'meyer.family@email.com',
-    phone: '+41 79 678 90 12',
-    appointments: 4,
-    totalRevenue: 120,
-    status: 'neu' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-11',
-    nextAppointment: null,
-    hasAppointmentThisWeek: false
-  }
-];
+// Customers are now loaded from the service
 
 export function CustomerManagement() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<typeof mockCustomers[0] | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [genderFilter, setGenderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'name' | 'revenue' | 'appointments' | 'lastVisit'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  
+  // State for managing customer data
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredCustomers = mockCustomers
+  // Load customers on component mount
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const customerData = await customerService.getCustomers();
+        setCustomers(customerData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load customers');
+        console.error('Error loading customers:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCustomers();
+  }, []);
+
+  const filteredCustomers = customers
     .filter(customer => {
       const matchesSearch = 
         customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -214,9 +154,9 @@ export function CustomerManagement() {
     });
 
   const getGenderStats = () => {
-    const female = mockCustomers.filter(c => c.gender === 'female').length;
-    const male = mockCustomers.filter(c => c.gender === 'male').length;
-    const children = mockCustomers.filter(c => c.gender === 'child').length;
+    const female = customers.filter(c => c.gender === 'female').length;
+    const male = customers.filter(c => c.gender === 'male').length;
+    const children = customers.filter(c => c.gender === 'child').length;
     return { female, male, children };
   };
 
@@ -383,7 +323,7 @@ export function CustomerManagement() {
         {/* Status Stats */}
         {Object.entries(customerStatusConfig).map(([key, config]) => {
           const Icon = config.icon;
-          const count = mockCustomers.filter(c => c.status === key).length;
+          const count = customers.filter(c => c.status === key).length;
           
           return (
             <Card key={key}>
@@ -423,7 +363,26 @@ export function CustomerManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCustomers.map((customer) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    Loading customers...
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-red-600">
+                    Error: {error}
+                  </TableCell>
+                </TableRow>
+              ) : filteredCustomers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    No customers found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredCustomers.map((customer) => (
                  <TableRow key={customer.id}>
                    <TableCell>
                      <div className="flex items-center gap-3">
@@ -493,7 +452,8 @@ export function CustomerManagement() {
                      </div>
                    </TableCell>
                 </TableRow>
-              ))}
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

@@ -5,6 +5,7 @@ import { CustomerManagement } from './CustomerManagement';
 import { FinancialOverview } from './FinancialOverview';
 import { InactiveCustomers } from './InactiveCustomers';
 import { AdminSettings } from './AdminSettings';
+import { FeatureFlagDemo } from './FeatureFlagDemo';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 
@@ -13,7 +14,7 @@ interface AdminDashboardProps {
 }
 
 export function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeView, setActiveView] = useState<'calendar' | 'customers' | 'finances' | 'inactive' | 'settings'>('calendar');
+  const [activeView, setActiveView] = useState<'calendar' | 'customers' | 'finances' | 'inactive' | 'settings' | 'demo'>('calendar');
 
   return (
     <div className="flex h-screen bg-background">
@@ -28,6 +29,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             {activeView === 'finances' && 'Finanzübersicht'}
             {activeView === 'inactive' && 'Inaktive Kunden'}
             {activeView === 'settings' && 'Einstellungen'}
+            {activeView === 'demo' && 'Backend Integration Demo'}
           </h1>
           <Button variant="outline" onClick={onLogout} className="gap-2">
             <LogOut className="w-4 h-4" />
@@ -42,6 +44,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
           {activeView === 'finances' && <FinancialOverview />}
           {activeView === 'inactive' && <InactiveCustomers />}
           {activeView === 'settings' && <AdminSettings />}
+          {activeView === 'demo' && <FeatureFlagDemo />}
         </main>
       </div>
     </div>

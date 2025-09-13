@@ -1,11 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Users, TrendingUp, Scissors, Settings, UserX } from 'lucide-react';
+import { Calendar, Users, TrendingUp, Scissors, Settings, UserX, Code } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdminSidebarProps {
-  activeView: 'calendar' | 'customers' | 'finances' | 'inactive' | 'settings';
-  onViewChange: (view: 'calendar' | 'customers' | 'finances' | 'inactive' | 'settings') => void;
+  activeView: 'calendar' | 'customers' | 'finances' | 'inactive' | 'settings' | 'demo';
+  onViewChange: (view: 'calendar' | 'customers' | 'finances' | 'inactive' | 'settings' | 'demo') => void;
 }
 
 export function AdminSidebar({ activeView, onViewChange }: AdminSidebarProps) {
@@ -39,6 +39,12 @@ export function AdminSidebar({ activeView, onViewChange }: AdminSidebarProps) {
       label: 'Einstellungen',
       icon: Settings,
       description: 'System & Profil'
+    },
+    {
+      id: 'demo' as const,
+      label: 'Backend Demo',
+      icon: Code,
+      description: 'Feature Flag Testing'
     }
   ];
 
