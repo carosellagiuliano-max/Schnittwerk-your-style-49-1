@@ -60,17 +60,20 @@ export interface Service {
   description: string;
   duration_minutes: number;
   price: number;
-  currency: string;
+  currency?: string;
+  category?: string;
   requires_gender?: 'female' | 'male' | 'child' | 'other';
-  is_active: boolean;
-  sort_order: number;
+  is_active?: boolean;
+  sort_order?: number;
 }
 
 export interface Appointment {
   id: string;
   customer_id: string;
+  customer_name?: string; // Added for display purposes
   staff_id: string;
   service_id: string;
+  service_name?: string; // Added for display purposes
   appointment_date: string;
   start_time: string;
   end_time: string;
@@ -80,6 +83,7 @@ export interface Appointment {
   currency: string;
   notes?: string;
   internal_notes?: string;
+  cancellation_reason?: string; // Added for cancellation tracking
   created_at: string;
   updated_at: string;
 }
@@ -220,6 +224,11 @@ export interface APIService {
   createStaffSchedule(schedule: Partial<StaffSchedule>): Promise<StaffSchedule>;
   updateStaffSchedule(id: string, schedule: Partial<StaffSchedule>): Promise<StaffSchedule>;
   deleteStaffSchedule(id: string): Promise<void>;
+  
+  // Sprint B Week 8: Customer Portal Methods
+  getCustomerAppointments(customerId: string): Promise<Appointment[]>;
+  cancelAppointment(appointmentId: string, reason?: string): Promise<void>;
+  rateAppointment(appointmentId: string, rating: number, feedback?: string): Promise<void>;
   
   // Sprint B: Waiting List Management
   getWaitingList(): Promise<WaitingListEntry[]>;
@@ -578,8 +587,10 @@ export class MockAPIService implements APIService {
       {
         id: 'appt_1',
         customer_id: '1',
+        customer_name: 'Sarah Meyer',
         staff_id: 'staff_1',
         service_id: 'service_1',
+        service_name: 'Schnitt & Styling',
         appointment_date: '2024-01-25',
         start_time: '14:00',
         end_time: '15:00',
@@ -590,6 +601,41 @@ export class MockAPIService implements APIService {
         notes: 'Kundenwunsch: Etwas kürzer schneiden',
         created_at: '2024-01-20T10:00:00Z',
         updated_at: '2024-01-20T10:00:00Z'
+      },
+      {
+        id: 'appt_2',
+        customer_id: '1',
+        customer_name: 'Sarah Meyer',
+        staff_id: 'staff_2',
+        service_id: 'service_2',
+        service_name: 'Farbe & Strähnen',
+        appointment_date: '2024-01-20',
+        start_time: '10:00',
+        end_time: '12:00',
+        duration_minutes: 120,
+        status: 'completed',
+        price: 150.00,
+        currency: 'CHF',
+        notes: 'Blonde Strähnen gewünscht',
+        created_at: '2024-01-15T09:00:00Z',
+        updated_at: '2024-01-20T12:00:00Z'
+      },
+      {
+        id: 'appt_3',
+        customer_id: '2',
+        customer_name: 'Anna Weber',
+        staff_id: 'staff_1',
+        service_id: 'service_1',
+        service_name: 'Schnitt & Styling',
+        appointment_date: '2024-01-28',
+        start_time: '16:00',
+        end_time: '17:00',
+        duration_minutes: 60,
+        status: 'pending',
+        price: 85.00,
+        currency: 'CHF',
+        created_at: '2024-01-22T14:30:00Z',
+        updated_at: '2024-01-22T14:30:00Z'
       }
     ];
   }
@@ -1078,6 +1124,31 @@ export class MockAPIService implements APIService {
     return appointment;
   }
 
+  // Sprint B Week 8: Customer Portal Methods
+  async getCustomerAppointments(customerId: string): Promise<Appointment[]> {
+    this.log('getCustomerAppointments', { customerId });
+    await this.delay();
+    
+    const appointments = await this.getAppointments();
+    return appointments.filter(apt => apt.customer_id === customerId);
+  }
+
+  async cancelAppointment(appointmentId: string, reason?: string): Promise<void> {
+    this.log('cancelAppointment', { appointmentId, reason });
+    await this.delay();
+    
+    // In real implementation, would update the appointment status
+    console.log(`Appointment ${appointmentId} cancelled: ${reason}`);
+  }
+
+  async rateAppointment(appointmentId: string, rating: number, feedback?: string): Promise<void> {
+    this.log('rateAppointment', { appointmentId, rating, feedback });
+    await this.delay();
+    
+    // In real implementation, would save to a ratings table
+    console.log(`Appointment ${appointmentId} rated ${rating}/5: ${feedback}`);
+  }
+
   // Helper method for time calculations
   private addMinutes(time: string, minutes: number): string {
     const [hours, mins] = time.split(':').map(Number);
@@ -1087,3 +1158,43 @@ export class MockAPIService implements APIService {
     return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
   }
 }
+
+// Sprint B Week 7 & 8: Additional Mock Data
+const mockStaffSchedules: StaffSchedule[] = [
+  {
+    id: 'schedule_1',
+    staff_id: 'staff_1',
+    effective_date: '2024-01-01',
+    day_of_week: 1, // Monday
+    start_time: '09:00',
+    end_time: '17:00',
+    break_start: '12:00',
+    break_end: '13:00',
+    is_regular: true,
+    is_available: true
+  },
+  {
+    id: 'schedule_2',
+    staff_id: 'staff_1',
+    effective_date: '2024-01-01',
+    day_of_week: 2, // Tuesday
+    start_time: '09:00',
+    end_time: '17:00',
+    break_start: '12:00',
+    break_end: '13:00',
+    is_regular: true,
+    is_available: true
+  },
+  {
+    id: 'schedule_3',
+    staff_id: 'staff_2',
+    effective_date: '2024-01-01',
+    day_of_week: 1, // Monday
+    start_time: '10:00',
+    end_time: '18:00',
+    break_start: '13:00',
+    break_end: '14:00',
+    is_regular: true,
+    is_available: true
+  }
+];
