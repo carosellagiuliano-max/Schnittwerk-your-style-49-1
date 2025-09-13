@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { X, Plus } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
 import { toast } from 'sonner';
-import { Product } from '@/data/products';
+import { Product } from '@/services/productService';
 
 interface ProductDetailDialogProps {
   product: Product | null;

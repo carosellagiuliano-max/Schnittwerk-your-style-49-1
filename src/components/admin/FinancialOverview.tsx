@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,76 +26,11 @@ import {
   MessageSquare,
   Clock,
   AlertTriangle,
-  Send
+  Send,
+  RefreshCw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart as RechartsPieChart, Cell } from 'recharts';
-
-const currentYearData = {
-  totalRevenue: 125400,
-  totalAppointments: 1847,
-  averagePerAppointment: 67.9,
-  newCustomers: 234,
-  returningCustomers: 156,
-  monthlyGrowth: 12.5
-};
-
-const previousYearData = {
-  totalRevenue: 108300,
-  totalAppointments: 1692,
-  averagePerAppointment: 64.0,
-  newCustomers: 198,
-  returningCustomers: 142,
-  monthlyGrowth: 8.2
-};
-
-const monthlyData = [
-  { month: 'Jan', revenue: 9800, appointments: 142 },
-  { month: 'Feb', revenue: 10200, appointments: 148 },
-  { month: 'Mar', revenue: 11500, appointments: 167 },
-  { month: 'Apr', revenue: 10800, appointments: 156 },
-  { month: 'Mai', revenue: 12100, appointments: 175 },
-  { month: 'Jun', revenue: 11900, appointments: 172 },
-  { month: 'Jul', revenue: 13200, appointments: 189 },
-  { month: 'Aug', revenue: 12800, appointments: 184 },
-  { month: 'Sep', revenue: 11600, appointments: 168 },
-  { month: 'Okt', revenue: 10900, appointments: 159 },
-  { month: 'Nov', revenue: 12300, appointments: 178 },
-  { month: 'Dez', revenue: 13400, appointments: 192 }
-];
-
-const serviceBreakdown = [
-  { service: 'Schnitt + Föhnen', revenue: 32500, percentage: 25.9 },
-  { service: 'Komplett Service', revenue: 28900, percentage: 23.1 },
-  { service: 'Färben + Schnitt', revenue: 24600, percentage: 19.6 },
-  { service: 'Waschen + Föhnen', revenue: 18200, percentage: 14.5 },
-  { service: 'Bart + Styling', revenue: 12800, percentage: 10.2 },
-  { service: 'Sonstiges', revenue: 8400, percentage: 6.7 }
-];
-
-// Enhanced data with time periods
-const dailyData = [
-  { day: 'Mo', revenue: 520, appointments: 8, date: '15.01' },
-  { day: 'Di', revenue: 680, appointments: 12, date: '16.01' },
-  { day: 'Mi', revenue: 450, appointments: 6, date: '17.01' },
-  { day: 'Do', revenue: 720, appointments: 11, date: '18.01' },
-  { day: 'Fr', revenue: 890, appointments: 14, date: '19.01' },
-  { day: 'Sa', revenue: 950, appointments: 15, date: '20.01' },
-  { day: 'So', revenue: 380, appointments: 5, date: '21.01' }
-];
-
-const weeklyData = [
-  { week: 'KW 1', revenue: 4200, appointments: 62, waitingListBookings: 3 },
-  { week: 'KW 2', revenue: 3800, appointments: 58, waitingListBookings: 5 },
-  { week: 'KW 3', revenue: 4500, appointments: 71, waitingListBookings: 2 },
-  { week: 'KW 4', revenue: 4100, appointments: 65, waitingListBookings: 4 }
-];
-
-const yearlyData = [
-  { year: '2021', revenue: 95400, appointments: 1245 },
-  { year: '2022', revenue: 108300, appointments: 1692 },
-  { year: '2023', revenue: 118900, appointments: 1756 },
-  { year: '2024', revenue: 125400, appointments: 1847 }
-];
+import { financialService, type FinancialSummary, type DailyFinancialReport, type RevenueAnalytics } from '@/services/api/financialService';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 

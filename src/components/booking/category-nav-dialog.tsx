@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShoppingBag, Gift, Users, Sparkles, Scissors } from 'lucide-react';
-import { productCategories } from '@/data/products';
+import { productService, type ProductCategory } from '@/services/productService';
 import CategoryShopDialog from './category-shop-dialog';
 import GiftBoxDialog from './gift-box-dialog';
 
@@ -21,6 +21,9 @@ interface CategoryNavDialogProps {
 }
 
 const CategoryNavDialog = ({ children, title, description }: CategoryNavDialogProps) => {
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const categories = [
     {
       name: 'Frauen Produkte',
@@ -48,6 +51,29 @@ const CategoryNavDialog = ({ children, title, description }: CategoryNavDialogPr
       special: true
     }
   ];
+
+  // Load product categories from API service
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        const data = await productService.getProducts();
+        setProductCategories(data);
+      } catch (error) {
+        console.error('Failed to load product categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
+
+  // Helper function to get product count for a category
+  const getProductCount = (categoryName: string): number => {
+    const category = productCategories.find(cat => cat.category === categoryName);
+    return category?.items.length || 0;
+  };
 
   return (
     <Dialog>
@@ -139,7 +165,7 @@ const CategoryNavDialog = ({ children, title, description }: CategoryNavDialogPr
                   </CardHeader>
                   <CardContent>
                     <div className="text-sm text-muted-foreground">
-                      {productCategories[category.name as keyof typeof productCategories]?.length || 0} Produkte verfügbar
+                      {loading ? 'Laden...' : `${getProductCount(category.name)} Produkte verfügbar`}
                     </div>
                   </CardContent>
                 </Card>

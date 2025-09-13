@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingBag, Search } from 'lucide-react';
-import { productCategories, Product } from '@/data/products';
+import { productService, type Product, type ProductCategory } from '@/services/productService';
 import ProductDetailDialog from './product-detail-dialog';
 
 interface ProductsDialogProps {
@@ -20,11 +20,34 @@ interface ProductsDialogProps {
 }
 
 const ProductsDialog = ({ children }: ProductsDialogProps) => {
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('Frauen Produkte');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // Load product categories from API service
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        const data = await productService.getProducts();
+        setProductCategories(data);
+        
+        if (data.length > 0) {
+          setActiveCategory(data[0].category);
+        }
+      } catch (error) {
+        console.error('Failed to load product categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
 
   const openProductDetail = (product: Product, category: string) => {
     setSelectedProduct(product);

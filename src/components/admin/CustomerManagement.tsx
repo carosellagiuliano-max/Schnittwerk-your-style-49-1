@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { AddCustomerModal } from './AddCustomerModal';
+import { apiService, type Customer } from '@/services/api';
 
 const customerStatusConfig = {
   neu: { 
@@ -68,112 +69,64 @@ const customerStatusConfig = {
   }
 };
 
-const mockCustomers = [
-  {
-    id: 1,
-    name: 'Maria Schmidt',
-    gender: 'female',
-    ageGroup: 'adult',
-    email: 'maria.schmidt@email.com',
-    phone: '+41 79 123 45 67',
-    appointments: 12,
-    totalRevenue: 1240,
-    status: 'gold' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-10',
-    nextAppointment: '2024-01-20',
-    hasAppointmentThisWeek: true
-  },
-  {
-    id: 2,
-    name: 'Hans Müller',
-    gender: 'male',
-    ageGroup: 'adult',
-    email: 'hans.mueller@email.com',
-    phone: '+41 79 234 56 78',
-    appointments: 8,
-    totalRevenue: 620,
-    status: 'silber' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-08',
-    nextAppointment: null,
-    hasAppointmentThisWeek: false
-  },
-  {
-    id: 3,
-    name: 'Sarah Weber',
-    gender: 'female',
-    ageGroup: 'adult',
-    email: 'sarah.weber@email.com',
-    phone: '+41 79 345 67 89',
-    appointments: 25,
-    totalRevenue: 2150,
-    status: 'diamant' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-12',
-    nextAppointment: '2024-01-25',
-    hasAppointmentThisWeek: false
-  },
-  {
-    id: 4,
-    name: 'Emma Keller',
-    gender: 'child',
-    ageGroup: 'child',
-    email: 'lisa.keller@email.com',
-    phone: '+41 79 456 78 90',
-    appointments: 3,
-    totalRevenue: 180,
-    status: 'neu' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-05',
-    nextAppointment: null,
-    hasAppointmentThisWeek: false
-  },
-  {
-    id: 5,
-    name: 'Thomas Zimmermann',
-    gender: 'male',
-    ageGroup: 'adult',
-    email: 'thomas.zimmermann@email.com',
-    phone: '+41 79 567 89 01',
-    appointments: 6,
-    totalRevenue: 390,
-    status: 'bronze' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-09',
-    nextAppointment: '2024-01-18',
-    hasAppointmentThisWeek: true
-  },
-  {
-    id: 6,
-    name: 'Luca Meyer',
-    gender: 'child',
-    ageGroup: 'child',
-    email: 'meyer.family@email.com',
-    phone: '+41 79 678 90 12',
-    appointments: 4,
-    totalRevenue: 120,
-    status: 'neu' as keyof typeof customerStatusConfig,
-    lastVisit: '2024-01-11',
-    nextAppointment: null,
-    hasAppointmentThisWeek: false
-  }
-];
+// Helper interface for extended customer data with calculated fields
+interface ExtendedCustomer extends Customer {
+  appointments?: number;
+  nextAppointment?: string | null;
+  hasAppointmentThisWeek?: boolean;
+}
 
 export function CustomerManagement() {
+  const [customers, setCustomers] = useState<ExtendedCustomer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<typeof mockCustomers[0] | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<ExtendedCustomer | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [genderFilter, setGenderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<'name' | 'revenue' | 'appointments' | 'lastVisit'>('name');
+  const [sortBy, setSortBy] = useState<'full_name' | 'total_spent' | 'appointments' | 'last_visit'>('full_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  const filteredCustomers = mockCustomers
+  // Load customers from API service
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const customerData = await apiService.getCustomers();
+        
+        // Extend customer data with calculated fields
+        // TODO: In Sprint B, these will come from real appointment data
+        const extendedCustomers: ExtendedCustomer[] = customerData.map((customer, index) => ({
+          ...customer,
+          appointments: Math.floor(Math.random() * 25) + 1, // Mock appointment count
+          nextAppointment: index % 3 === 0 ? '2024-01-25' : null, // Mock next appointment
+          hasAppointmentThisWeek: index % 4 === 0, // Mock this week appointment
+        }));
+        
+        setCustomers(extendedCustomers);
+      } catch (err) {
+        console.error('Failed to load customers:', err);
+        setError('Fehler beim Laden der Kunden. Bitte versuchen Sie es erneut.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCustomers();
+  }, []);
+
+  const filteredCustomers = customers
     .filter(customer => {
       const matchesSearch = 
-        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.phone.includes(searchTerm);
+        (customer.phone && customer.phone.includes(searchTerm));
       
       const matchesGender = genderFilter === 'all' || customer.gender === genderFilter;
-      const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || customer.loyalty_status === statusFilter;
       const matchesAppointment = 
         appointmentFilter === 'all' ||
         (appointmentFilter === 'hasNext' && customer.nextAppointment) ||
@@ -186,21 +139,21 @@ export function CustomerManagement() {
       let aValue: any, bValue: any;
       
       switch (sortBy) {
-        case 'name':
-          aValue = a.name;
-          bValue = b.name;
+        case 'full_name':
+          aValue = a.full_name;
+          bValue = b.full_name;
           break;
-        case 'revenue':
-          aValue = a.totalRevenue;
-          bValue = b.totalRevenue;
+        case 'total_spent':
+          aValue = a.total_spent;
+          bValue = b.total_spent;
           break;
         case 'appointments':
-          aValue = a.appointments;
-          bValue = b.appointments;
+          aValue = a.appointments || 0;
+          bValue = b.appointments || 0;
           break;
-        case 'lastVisit':
-          aValue = new Date(a.lastVisit);
-          bValue = new Date(b.lastVisit);
+        case 'last_visit':
+          aValue = a.last_visit ? new Date(a.last_visit) : new Date(0);
+          bValue = b.last_visit ? new Date(b.last_visit) : new Date(0);
           break;
         default:
           return 0;
@@ -214,9 +167,9 @@ export function CustomerManagement() {
     });
 
   const getGenderStats = () => {
-    const female = mockCustomers.filter(c => c.gender === 'female').length;
-    const male = mockCustomers.filter(c => c.gender === 'male').length;
-    const children = mockCustomers.filter(c => c.gender === 'child').length;
+    const female = customers.filter(c => c.gender === 'female').length;
+    const male = customers.filter(c => c.gender === 'male').length;
+    const children = customers.filter(c => c.gender === 'child').length;
     return { female, male, children };
   };
 
@@ -226,7 +179,7 @@ export function CustomerManagement() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  const renderStatusBadge = (status: keyof typeof customerStatusConfig) => {
+  const renderStatusBadge = (status: Customer['loyalty_status']) => {
     const config = customerStatusConfig[status];
     const Icon = config.icon;
     
@@ -255,6 +208,38 @@ export function CustomerManagement() {
       default: return 'text-gray-600';
     }
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">Kunden werden geladen...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Erneut versuchen
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -318,10 +303,10 @@ export function CustomerManagement() {
               <SelectValue placeholder="Sortieren" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="name">Name</SelectItem>
-              <SelectItem value="revenue">Umsatz</SelectItem>
+              <SelectItem value="full_name">Name</SelectItem>
+              <SelectItem value="total_spent">Umsatz</SelectItem>
               <SelectItem value="appointments">Termine</SelectItem>
-              <SelectItem value="lastVisit">Letzter Besuch</SelectItem>
+              <SelectItem value="last_visit">Letzter Besuch</SelectItem>
             </SelectContent>
           </Select>
 
@@ -383,7 +368,7 @@ export function CustomerManagement() {
         {/* Status Stats */}
         {Object.entries(customerStatusConfig).map(([key, config]) => {
           const Icon = config.icon;
-          const count = mockCustomers.filter(c => c.status === key).length;
+          const count = customers.filter(c => c.loyalty_status === key).length;
           
           return (
             <Card key={key}>
@@ -429,20 +414,25 @@ export function CustomerManagement() {
                      <div className="flex items-center gap-3">
                        <div className="relative">
                          <Avatar>
-                           <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
+                           <AvatarFallback>{getInitials(customer.full_name)}</AvatarFallback>
                          </Avatar>
                          <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
                            customer.gender === 'female' ? 'bg-pink-500' : 
-                           customer.gender === 'male' ? 'bg-blue-500' : 'bg-purple-500'
+                           customer.gender === 'male' ? 'bg-blue-500' : 
+                           customer.gender === 'child' ? 'bg-purple-500' : 'bg-gray-500'
                          }`} />
                        </div>
                        <div>
                          <div className="font-medium flex items-center gap-2">
-                           {customer.name}
+                           {customer.full_name}
                            {customer.gender === 'child' && <Baby className="w-4 h-4 text-purple-600" />}
                          </div>
                          <div className="text-sm text-muted-foreground">
-                           ID: {customer.id} • {customer.gender === 'female' ? 'Frau' : customer.gender === 'male' ? 'Mann' : 'Kind'}
+                           ID: {customer.id} • {
+                             customer.gender === 'female' ? 'Frau' : 
+                             customer.gender === 'male' ? 'Mann' : 
+                             customer.gender === 'child' ? 'Kind' : 'Person'
+                           }
                          </div>
                        </div>
                      </div>
@@ -450,27 +440,30 @@ export function CustomerManagement() {
                   <TableCell>
                     <div className="text-sm">
                       <div>{customer.email}</div>
-                      <div className="text-muted-foreground">{customer.phone}</div>
+                      <div className="text-muted-foreground">{customer.phone || 'Keine Telefonnummer'}</div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    {renderStatusBadge(customer.status)}
+                    {renderStatusBadge(customer.loyalty_status)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4 text-muted-foreground" />
-                      {customer.appointments}
+                      {customer.appointments || 0}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 font-semibold">
                       <Euro className="w-4 h-4 text-green-600" />
-                      CHF {customer.totalRevenue.toLocaleString()}
+                      CHF {customer.total_spent.toLocaleString()}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      {new Date(customer.lastVisit).toLocaleDateString('de-CH')}
+                      {customer.last_visit ? 
+                        new Date(customer.last_visit).toLocaleDateString('de-CH') : 
+                        'Noch kein Besuch'
+                      }
                     </div>
                   </TableCell>
                   <TableCell>

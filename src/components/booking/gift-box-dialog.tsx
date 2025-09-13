@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Gift, Plus } from 'lucide-react';
-import { productCategories, Product } from '@/data/products';
+import { productService, type Product, type ProductCategory } from '@/services/productService';
 import { useCart } from '@/contexts/cart-context';
 import { toast } from '@/hooks/use-toast';
 
@@ -21,12 +21,34 @@ interface GiftBoxDialogProps {
 }
 
 const GiftBoxDialog = ({ children }: GiftBoxDialogProps) => {
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   const { addToCart } = useCart();
 
-  const allProducts = Object.values(productCategories)
-    .flat()
-    .filter(product => product.id !== 'gift-box');
+  // Load product categories from API service
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        const data = await productService.getProducts();
+        setProductCategories(data);
+        
+        // Flatten all products and filter out gift-box
+        const flatProducts = data
+          .flatMap(cat => cat.items)
+          .filter(product => product.id !== 'gift-box');
+        setAllProducts(flatProducts);
+      } catch (error) {
+        console.error('Failed to load product categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
 
   const handleProductToggle = (product: Product, checked: boolean) => {
     if (checked) {
