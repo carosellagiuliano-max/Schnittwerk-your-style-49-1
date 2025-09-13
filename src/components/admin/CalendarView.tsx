@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,115 +8,46 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, User, Scissors, Search, Filter, Plus, ChevronLeft, ChevronRight, Phone, Mail, CalendarDays, Grid3X3, Layout, Maximize2 } from 'lucide-react';
 import { AppointmentBookingDialog } from '@/components/booking/appointment-booking-dialog';
 import { AddCustomerModal } from './AddCustomerModal';
+import { apiService, type Appointment } from '@/services/api';
 
-const mockEmployees = [
-  { id: 'all', name: 'Alle Mitarbeiter', color: 'bg-gray-100' },
-  { id: 'vanessa', name: 'Vanessa (Inhaberin)', color: 'bg-pink-100' },
-  { id: 'marco', name: 'Marco (Stylist)', color: 'bg-blue-100' },
-  { id: 'sarah', name: 'Sarah (Assistentin)', color: 'bg-green-100' }
-];
+// Staff interface for extended data
+interface Staff {
+  id: string;
+  name: string;
+  color: string;
+}
 
-const mockAppointments = [
-  {
-    id: 1,
-    time: '09:00',
-    customer: 'Maria Schmidt',
-    gender: 'female',
-    service: 'Schnitt + Föhnen',
-    duration: '60 min',
-    price: 'CHF 65',
-    status: 'bestätigt',
-    employee: 'vanessa'
-  },
-  {
-    id: 2,
-    time: '10:30',
-    customer: 'Hans Müller',
-    gender: 'male',
-    service: 'Komplett Service',
-    duration: '90 min',
-    price: 'CHF 85',
-    status: 'bestätigt',
-    employee: 'marco'
-  },
-  {
-    id: 3,
-    time: '12:00',
-    customer: 'Sarah Weber',
-    gender: 'female',
-    service: 'Färben + Schnitt',
-    duration: '120 min',
-    price: 'CHF 140',
-    status: 'pending',
-    employee: 'vanessa'
-  },
-  {
-    id: 4,
-    time: '14:30',
-    customer: 'Lisa Keller',
-    gender: 'female',
-    service: 'Waschen + Föhnen',
-    duration: '45 min',
-    price: 'CHF 45',
-    status: 'bestätigt',
-    employee: 'sarah'
-  },
-  {
-    id: 5,
-    time: '16:00',
-    customer: 'Thomas Zimmermann',
-    gender: 'male',
-    service: 'Bart + Styling',
-    duration: '30 min',
-    price: 'CHF 35',
-    status: 'bestätigt',
-    employee: 'marco'
-  }
-];
+// Extended appointment interface with calculated fields
+interface ExtendedAppointment extends Appointment {
+  customer_name?: string;
+  service_name?: string;
+  staff_name?: string;
+}
 
-const mockWaitingList = [
-  {
-    id: 1,
-    name: 'Thomas Wagner',
-    gender: 'male',
-    phone: '+41 79 123 45 67',
-    email: 'thomas.wagner@email.com',
-    preferredService: 'Schnitt + Föhnen',
-    preferredDate: '2024-01-15',
-    preferredTime: '14:00',
-    waitingSince: '2024-01-10',
-    flexible: true,
-    priority: 'high'
-  },
-  {
-    id: 2,
-    name: 'Julia Meier',
-    gender: 'female',
-    phone: '+41 78 987 65 43',
-    email: 'julia.meier@email.com',
-    preferredService: 'Komplett Service',
-    preferredDate: '2024-01-16',
-    preferredTime: '10:00',
-    waitingSince: '2024-01-12',
-    flexible: false,
-    priority: 'medium'
-  },
-  {
-    id: 3,
-    name: 'Michael Zimmermann',
-    gender: 'male',
-    phone: '+41 76 555 12 34',
-    email: 'michael.z@email.com',
-    preferredService: 'Bart + Styling',
-    preferredDate: '2024-01-15',
-    preferredTime: '16:30',
-    waitingSince: '2024-01-13',
-    flexible: true,
-    priority: 'low'
-  }
-];
+// Waiting list interface
+interface WaitingListEntry {
+  id: string;
+  name: string;
+  gender: string;
+  phone?: string;
+  email?: string;
+  preferredService: string;
+  preferredDate: string;
+  preferredTime: string;
+  waitingSince: string;
+  flexible: boolean;
+  priority: 'low' | 'medium' | 'high';
+}
 
 export function CalendarView() {
+  // State management
+  const [appointments, setAppointments] = useState<ExtendedAppointment[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // UI state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedDateString, setSelectedDateString] = useState('2024-01-15');
   const [searchTerm, setSearchTerm] = useState('');
@@ -130,6 +61,74 @@ export function CalendarView() {
   const [activeTab, setActiveTab] = useState('calendar');
   const [showNeonNotification, setShowNeonNotification] = useState(false);
   const [neonNotificationData, setNeonNotificationData] = useState<any>(null);
+
+  // Load data from API service
+  useEffect(() => {
+    const loadCalendarData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Load appointments and calculate extended data
+        // TODO: In Sprint B, this will load real appointment data
+        const appointmentData = await apiService.getAppointments();
+        const extendedAppointments: ExtendedAppointment[] = appointmentData.map((apt, index) => ({
+          ...apt,
+          customer_name: `Kunde ${index + 1}`, // Mock customer name
+          service_name: `Service ${index + 1}`, // Mock service name  
+          staff_name: `Mitarbeiter ${index + 1}`, // Mock staff name
+        }));
+        
+        setAppointments(extendedAppointments);
+        
+        // Mock staff data - will be replaced with real data in Sprint B
+        setStaff([
+          { id: 'all', name: 'Alle Mitarbeiter', color: 'bg-gray-100' },
+          { id: 'vanessa', name: 'Vanessa (Inhaberin)', color: 'bg-pink-100' },
+          { id: 'marco', name: 'Marco (Stylist)', color: 'bg-blue-100' },
+          { id: 'sarah', name: 'Sarah (Assistentin)', color: 'bg-green-100' }
+        ]);
+        
+        // Mock waiting list data - will be replaced with real data in Sprint B
+        setWaitingList([
+          {
+            id: '1',
+            name: 'Thomas Wagner',
+            gender: 'male',
+            phone: '+41 79 123 45 67',
+            email: 'thomas.wagner@email.com',
+            preferredService: 'Schnitt + Föhnen',
+            preferredDate: '2024-01-15',
+            preferredTime: '14:00',
+            waitingSince: '2024-01-10',
+            flexible: true,
+            priority: 'high'
+          },
+          {
+            id: '2',
+            name: 'Julia Meier',
+            gender: 'female',
+            phone: '+41 78 987 65 43',
+            email: 'julia.meier@email.com',
+            preferredService: 'Komplett Service',
+            preferredDate: '2024-01-16',
+            preferredTime: '10:00',
+            waitingSince: '2024-01-12',
+            flexible: false,
+            priority: 'medium'
+          }
+        ]);
+        
+      } catch (err) {
+        console.error('Failed to load calendar data:', err);
+        setError('Fehler beim Laden der Kalenderdaten. Bitte versuchen Sie es erneut.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCalendarData();
+  }, []);
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const currentDate = new Date(selectedDate);
@@ -231,13 +230,45 @@ export function CalendarView() {
 
   // Filter appointments based on selected employee
   const filteredAppointments = selectedEmployee === 'all' 
-    ? mockAppointments 
-    : mockAppointments.filter(apt => apt.employee === selectedEmployee);
+    ? appointments 
+    : appointments.filter(apt => apt.staff_id === selectedEmployee);
 
   const getEmployeeColor = (employeeId: string) => {
-    const employee = mockEmployees.find(emp => emp.id === employeeId);
+    const employee = staff.find(emp => emp.id === employeeId);
     return employee?.color || 'bg-gray-100';
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">Kalender wird geladen...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Erneut versuchen
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -298,7 +329,7 @@ export function CalendarView() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Warteschlange</p>
-                <p className="text-2xl font-bold">{mockWaitingList.length}</p>
+                <p className="text-2xl font-bold">{waitingList.length}</p>
               </div>
             </div>
           </CardContent>
@@ -328,7 +359,7 @@ export function CalendarView() {
           </TabsTrigger>
           <TabsTrigger value="waiting" className="gap-2">
             <Clock className="w-4 h-4" />
-            Warteschlange ({mockWaitingList.length})
+            Warteschlange ({waitingList.length})
           </TabsTrigger>
         </TabsList>
 
@@ -347,7 +378,7 @@ export function CalendarView() {
                       <SelectValue placeholder="Mitarbeiter auswählen" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockEmployees.map((employee) => (
+                      {staff.map((employee) => (
                         <SelectItem key={employee.id} value={employee.id}>
                           <div className="flex items-center gap-2">
                             <div className={`w-3 h-3 rounded-full ${employee.color} border`}></div>
@@ -361,7 +392,7 @@ export function CalendarView() {
                 
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-4">
-                    {mockEmployees.slice(1).map((employee) => (
+                    {staff.slice(1).map((employee) => (
                       <div key={employee.id} className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${employee.color} border`}></div>
                         <span className="text-xs">{employee.name.split(' ')[0]}</span>
@@ -395,7 +426,7 @@ export function CalendarView() {
                 <div className="text-center">
                   <h3 className="font-semibold">{formatDateRange()}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {selectedEmployee === 'all' ? 'Alle Mitarbeiter' : mockEmployees.find(emp => emp.id === selectedEmployee)?.name} - {viewType.charAt(0).toUpperCase() + viewType.slice(1)}ansicht
+                    {selectedEmployee === 'all' ? 'Alle Mitarbeiter' : staff.find(emp => emp.id === selectedEmployee)?.name} - {viewType.charAt(0).toUpperCase() + viewType.slice(1)}ansicht
                   </p>
                 </div>
                 
@@ -449,8 +480,11 @@ export function CalendarView() {
                     
                     {/* Time Slots */}
                     {Array.from({ length: 12 }, (_, timeIndex) => {
+                      // For now, using mock appointment logic since real appointment scheduling 
+                      // will be implemented in Sprint B
+                      const timeSlot = `${(9 + timeIndex).toString().padStart(2, '0')}:00`;
                       const hasAppointment = filteredAppointments.find(apt => 
-                        parseInt(apt.time.split(':')[0]) === 9 + timeIndex && 
+                        apt.start_time === timeSlot && 
                         dayIndex < 5 // Only weekdays have appointments
                       );
                       
@@ -459,7 +493,7 @@ export function CalendarView() {
                           key={timeIndex}
                            className={`${isCompactView ? 'h-12' : 'h-16'} rounded border-2 border-dashed hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all group relative ${
                              hasAppointment 
-                               ? `${getEmployeeColor(hasAppointment.employee)} border-2 border-solid hover:opacity-80` 
+                               ? `${getEmployeeColor(hasAppointment.staff_id)} border-2 border-solid hover:opacity-80` 
                                : 'bg-background border-border/30 hover:bg-muted/20'
                            }`}
                            onClick={handleQuickBook}
@@ -467,26 +501,25 @@ export function CalendarView() {
                            {hasAppointment ? (
                              <div className="p-2 h-full flex flex-col justify-center relative">
                                <div className={`${isCompactView ? 'text-xs' : 'text-sm'} font-medium truncate`}>
-                                 {hasAppointment.customer}
+                                 {hasAppointment.customer_name || 'Kunde'}
                                </div>
                                <div className="text-xs opacity-70 truncate">
-                                 {hasAppointment.service}
+                                 {hasAppointment.service_name || 'Service'}
                                </div>
                                <div className="text-xs font-medium text-primary truncate">
-                                 {mockEmployees.find(emp => emp.id === hasAppointment.employee)?.name.split(' ')[0]}
+                                 {staff.find(emp => emp.id === hasAppointment.staff_id)?.name.split(' ')[0] || 'Mitarbeiter'}
                                </div>
                                {!isCompactView && (
                                  <div className="text-xs font-medium">
-                                   {hasAppointment.price}
+                                   CHF {hasAppointment.price}
                                  </div>
                                )}
                                {/* Employee and Gender indicators */}
                                <div className="absolute top-1 right-1 flex gap-1">
-                                 <div className={`w-2 h-2 rounded-full ${
-                                   hasAppointment.gender === 'female' ? 'bg-pink-500' : 'bg-blue-500'
-                                 }`} title={hasAppointment.gender === 'female' ? 'Damen' : 'Herren'} />
-                                 <div className={`w-2 h-2 rounded-full border ${getEmployeeColor(hasAppointment.employee).replace('bg-', 'bg-').replace('-100', '-500')}`} 
-                                      title={mockEmployees.find(emp => emp.id === hasAppointment.employee)?.name} />
+                                 <div className={`w-2 h-2 rounded-full bg-gray-400`} 
+                                      title="Customer" />
+                                 <div className={`w-2 h-2 rounded-full border ${getEmployeeColor(hasAppointment.staff_id).replace('bg-', 'bg-').replace('-100', '-500')}`} 
+                                      title={staff.find(emp => emp.id === hasAppointment.staff_id)?.name || 'Mitarbeiter'} />
                                </div>
                              </div>
                           ) : (
@@ -514,13 +547,13 @@ export function CalendarView() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {mockWaitingList.length === 0 ? (
+                {waitingList.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>Keine Kunden in der Warteschlange</p>
                   </div>
                 ) : (
-                  mockWaitingList.map((customer) => (
+                  waitingList.map((customer) => (
                     <Card key={customer.id} className={`border-l-4 ${getWaitingListGenderColor(customer.gender)} hover:shadow-lg transition-all`}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
